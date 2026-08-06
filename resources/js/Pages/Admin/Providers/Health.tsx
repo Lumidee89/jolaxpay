@@ -26,7 +26,7 @@ export default function Health({ providers }: { providers: Provider[] }) {
             <Head title="Provider Health" />
 
             <div className="mx-auto max-w-7xl py-8 sm:px-6 lg:px-8">
-                <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-100">
+                <div className="overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-gray-900/5">
                     <table className="min-w-full divide-y divide-gray-100 text-sm">
                         <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
                             <tr>
@@ -57,7 +57,7 @@ export default function Health({ providers }: { providers: Provider[] }) {
                                             <select
                                                 value={p.health_status}
                                                 onChange={(e) => updateHealth(p, e.target.value)}
-                                                className="rounded-md border-gray-300 text-xs shadow-sm focus:border-red-800 focus:ring-red-800"
+                                                className="rounded-md border-gray-300 text-xs shadow-sm focus:border-brand-600 focus:ring-brand-600"
                                             >
                                                 {HEALTH_OPTIONS.map((opt) => (
                                                     <option key={opt} value={opt}>

@@ -30,13 +30,13 @@ export default function Index({ users, filters }: Props) {
             <Head title="Users" />
 
             <div className="mx-auto max-w-7xl space-y-4 py-8 sm:px-6 lg:px-8">
-                <form onSubmit={submit} className="flex items-center gap-3 rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100">
+                <form onSubmit={submit} className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-card ring-1 ring-gray-900/5">
                     <input
                         type="text"
                         placeholder="Search name, email, phone…"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="rounded-md border-gray-300 text-sm shadow-sm focus:border-red-800 focus:ring-red-800"
+                        className="rounded-md border-gray-300 text-sm shadow-sm focus:border-brand-600 focus:ring-brand-600"
                     />
                     <button type="submit" className="rounded-md bg-gray-800 px-3 py-2 text-sm text-white">
                         Search
@@ -44,7 +44,7 @@ export default function Index({ users, filters }: Props) {
                     <span className="ml-auto text-sm text-gray-500">{users.total} total</span>
                 </form>
 
-                <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-100">
+                <div className="overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-gray-900/5">
                     <table className="min-w-full divide-y divide-gray-100 text-sm">
                         <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
                             <tr>
@@ -60,7 +60,7 @@ export default function Index({ users, filters }: Props) {
                             {users.data.map((u) => (
                                 <tr key={u.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-3">
-                                        <Link href={route('admin.users.show', u.id)} className="text-red-800 hover:underline">
+                                        <Link href={route('admin.users.show', u.id)} className="text-brand-700 hover:underline">
                                             {u.full_name}
                                         </Link>
                                     </td>

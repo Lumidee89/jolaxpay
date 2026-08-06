@@ -3,7 +3,9 @@
 namespace App\Domain\Vending\Providers;
 
 use App\Domain\Vending\Contracts\VendingProviderContract;
+use App\Domain\Vending\DataTransferObjects\MeterVerificationResult;
 use App\Domain\Vending\DataTransferObjects\VendResult;
+use App\Models\Meter;
 use App\Models\Transaction;
 use Illuminate\Support\Str;
 
@@ -34,6 +36,17 @@ class MockElectricityProvider implements VendingProviderContract
             token: $token,
             providerReference: 'MOCK-'.Str::upper(Str::random(10)),
             message: 'Mock provider: token generated.',
+        );
+    }
+
+    public function verifyMeter(Meter $meter): MeterVerificationResult
+    {
+        return new MeterVerificationResult(
+            valid: true,
+            customerName: 'Mock Customer ('.$meter->meter_number.')',
+            address: '1 Mock Street, Lagos',
+            minimumAmount: '500.00',
+            message: 'Mock provider: meter verified.',
         );
     }
 

@@ -26,13 +26,13 @@ export default function Index({ tickets, filters }: Props) {
             <Head title="Support" />
 
             <div className="mx-auto max-w-7xl space-y-4 py-8 sm:px-6 lg:px-8">
-                <div className="flex items-center gap-3 rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100">
+                <div className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-card ring-1 ring-gray-900/5">
                     <select
                         value={filters.status ?? ''}
                         onChange={(e) =>
                             router.get(route('admin.support.index'), { status: e.target.value || undefined }, { preserveState: true })
                         }
-                        className="rounded-md border-gray-300 text-sm shadow-sm focus:border-red-800 focus:ring-red-800"
+                        className="rounded-md border-gray-300 text-sm shadow-sm focus:border-brand-600 focus:ring-brand-600"
                     >
                         <option value="">All statuses</option>
                         {STATUSES.map((s) => (
@@ -44,7 +44,7 @@ export default function Index({ tickets, filters }: Props) {
                     <span className="ml-auto text-sm text-gray-500">{tickets.total} total</span>
                 </div>
 
-                <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-100">
+                <div className="overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-gray-900/5">
                     <table className="min-w-full divide-y divide-gray-100 text-sm">
                         <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
                             <tr>
@@ -60,7 +60,7 @@ export default function Index({ tickets, filters }: Props) {
                             {tickets.data.map((t) => (
                                 <tr key={t.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-3">
-                                        <Link href={route('admin.support.show', t.id)} className="text-red-800 hover:underline">
+                                        <Link href={route('admin.support.show', t.id)} className="text-brand-700 hover:underline">
                                             {t.subject}
                                         </Link>
                                         {t.transaction_id && (

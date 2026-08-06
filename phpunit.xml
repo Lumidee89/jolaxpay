@@ -29,6 +29,17 @@
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
+        <!-- Pinned regardless of the developer's local .env (e.g. a real
+             VTPASS_ENV=vtpass while testing sandbox integration by hand) —
+             the suite must never call a real third-party API. Tests that
+             specifically want to exercise a live driver's request/response
+             parsing (see VtpassElectricityProviderTest) instantiate it
+             directly with Http::fake(), bypassing this. -->
+        <env name="VENDING_ELECTRICITY_DRIVER" value="mock"/>
+        <env name="PAYMENTS_DOMESTIC_DRIVER" value="mock"/>
+        <env name="PAYMENTS_INTERNATIONAL_DRIVER" value="mock"/>
+        <env name="SMS_DRIVER" value="log"/>
+        <env name="WHATSAPP_DRIVER" value="log"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

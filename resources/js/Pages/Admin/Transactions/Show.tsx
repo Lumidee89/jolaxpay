@@ -81,7 +81,7 @@ export default function Show({ transaction }: { transaction: TransactionDetail }
 
             <div className="mx-auto max-w-7xl space-y-6 py-8 sm:px-6 lg:px-8">
                 {canManage && !isTerminal && (
-                    <div className="flex gap-3 rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-100">
+                    <div className="flex gap-3 rounded-xl bg-white p-4 shadow-card ring-1 ring-gray-900/5">
                         <SecondaryButton onClick={retry}>Manual retry</SecondaryButton>
                         <DangerButton onClick={refund} disabled={transaction.refunded_to_wallet}>
                             {transaction.refunded_to_wallet ? 'Already refunded' : 'Refund to wallet'}
@@ -125,7 +125,7 @@ export default function Show({ transaction }: { transaction: TransactionDetail }
                             <div className="space-y-3">
                                 {transaction.status_history.map((h, i) => (
                                     <div key={i} className="flex items-start gap-3 text-sm">
-                                        <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-800" />
+                                        <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-700" />
                                         <div>
                                             <div className="font-medium text-gray-800">
                                                 {h.from_status ? `${h.from_status} → ${h.to_status}` : h.to_status}
@@ -176,7 +176,7 @@ export default function Show({ transaction }: { transaction: TransactionDetail }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-100">
+        <div className="rounded-xl bg-white p-6 shadow-card ring-1 ring-gray-900/5">
             <h3 className="mb-4 font-medium text-gray-800">{title}</h3>
             {children}
         </div>

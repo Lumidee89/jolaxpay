@@ -156,7 +156,13 @@ class TransactionService
             return;
         }
 
-        $transaction->update(['token' => $result->token]);
+        $transaction->update([
+            'token' => $result->token,
+            // Merges in whatever the driver returned (VTpass: units, its
+            // own request_id for requery, token_amount, ...) without
+            // clobbering meta set earlier in the flow (e.g. simulate_failure).
+            'meta' => [...($transaction->meta ?? []), ...$result->raw],
+        ]);
         $this->stateMachine->transition($transaction, TransactionStatus::TokenGenerated, 'Provider returned a valid token.');
 
         DeliverToken::dispatch($transaction);

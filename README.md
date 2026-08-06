@@ -7,10 +7,11 @@ one level up (`01-JolaxPay-PRD.md` … `04-JolaxPay-Implementation-Plan.md`)
 for the full product/technical spec this implements.
 
 This repo is the Phase 1 MVP scaffold per the Implementation Plan: the full
-domain layer, database schema, mobile API, and a working (if visually
-minimal) admin panel, all wired together and tested end-to-end. Live payment
-processor / DisCo vending integrations are intentionally **mocked** — see
-[Mocked vs. real](#mocked-vs-real) below.
+domain layer, database schema, mobile API, and a working admin panel, all
+wired together and tested end-to-end. Electricity vending is a real
+integration (VTpass — see [Electricity vending](#electricity-vending-vtpass)
+below); the payment processor is still mocked — see
+[Mocked vs. real](#mocked-vs-real).
 
 ## Stack
 
@@ -20,7 +21,7 @@ processor / DisCo vending integrations are intentionally **mocked** — see
 | Mobile API | `/api/v1/*`, Sanctum personal-access tokens |
 | Admin | `/admin/*`, Inertia + React 18 + TypeScript, session guard |
 | Roles/permissions | `spatie/laravel-permission` (`super_admin`, `ops`, `support`) |
-| Database | PostgreSQL in staging/production; SQLite locally (zero-config) |
+| Database | PostgreSQL in staging/production; SQLite or MySQL locally |
 | Cache/queues/sessions | Redis (via `predis`, no PHP extension required) |
 | Realtime | Laravel Reverb, `private-transaction.{id}` channel |
 | PDF receipts | `barryvdh/laravel-dompdf` |
@@ -83,6 +84,42 @@ Highlights:
 - `GET/POST /v1/scheduled-purchases`, `/v1/power-circle`, `/v1/meter-groups`, `/v1/referrals`
 - `GET/POST /v1/support/tickets`
 - `GET /v1/providers/status` (public, no auth)
+- `POST /v1/meters/verify` — checks a meter number against the DisCo before
+  it's saved or purchased against, returning the customer's name
+
+## Electricity vending (VTpass)
+
+`VENDING_ELECTRICITY_DRIVER=vtpass` in `.env` activates
+`App\Domain\Vending\Providers\VtpassElectricityProvider`, a real integration
+against [VTpass](https://vtpass.com/documentation/) — not a stub. Get your
+keys from the VTpass dashboard's API Keys tab (sandbox and live are separate
+accounts) and set `VTPASS_API_KEY`, `VTPASS_SECRET_KEY`, `VTPASS_PUBLIC_KEY`,
+and `VTPASS_ENV` (`sandbox` by default). VTpass's own sandbox has a
+pre-loaded wallet and behaves like the live API, so this is safe to point at
+for genuine end-to-end testing — no mocking required once your keys are set.
+
+A few things worth knowing before you flip the driver on:
+
+- `Disco.api_provider_code` must hold VTpass's `serviceID` for that biller
+  (`ikeja-electric`, `eko-electric`, …) — `DiscoSeeder` already seeds the
+  correct value for all ten DisCos it creates, verified against VTpass's own
+  per-biller docs.
+- VTpass's guidance is to **requery, not resubmit**, a "pending" transaction.
+  The provider stores VTpass's own `request_id` on `transaction.meta` the
+  first time it pays, and every subsequent retry from
+  `TransactionService::processVending()`'s bounded retry loop requeries that
+  same id instead of paying again.
+- If every bounded retry still comes back "pending", the purchase is marked
+  Failed and auto-refunded per the normal flow — but VTpass may still
+  resolve it to "delivered" asynchronously afterward. Closing that gap for
+  real needs a VTpass webhook receiver plus a reconciliation job (the
+  Reconciliation admin page is the natural home for that check); it's not
+  built yet, and is called out as a known limitation in the provider's
+  docblock, not silently ignored.
+- `POST /v1/meters/verify` (and `verifyMeter()` on the provider contract)
+  wraps VTpass's `merchant-verify` — use it before saving a meter or
+  initiating a purchase to catch a mistyped meter number and show the
+  customer's name up front.
 
 ## Admin panel (`/admin`)
 
@@ -97,6 +134,17 @@ Provider Health, Support Tickets, Referrals, Users, Reconciliation. Each
 non-dashboard page is gated by its own permission (`manage-transactions`,
 `manage-providers`, etc.) — see `database/seeders/RolesAndPermissionsSeeder.php`
 for exactly what each of the three roles can do.
+
+## Branding
+
+The admin UI uses the JolaxPay mark (`public/images/logo.png`, sourced from
+`../logo.png` at the repo root) as its logo and favicon, and a `brand` color
+scale in `tailwind.config.js` sampled from the logo's own red gradient.
+`brand-700` (`#8f0e23`) is the primary action color; functional colors
+(success/warning/danger status badges) intentionally stay on Tailwind's
+standard palette so a red "failed" badge never reads as a brand-colored
+button. See `resources/js/Components/ApplicationLogo.tsx` and
+`resources/js/Components/Admin/StatusBadge.tsx`.
 
 ## Architecture
 
@@ -126,18 +174,21 @@ automatic wallet refund.
 
 ## Mocked vs. real
 
-Everything for **electricity vending** and **domestic/international
-payments** ships behind an interface with a `mock` driver active by default
+Both vending and payments ship behind a driver interface
 (`VENDING_ELECTRICITY_DRIVER`, `PAYMENTS_DOMESTIC_DRIVER`,
-`PAYMENTS_INTERNATIONAL_DRIVER` in `.env`) — this is intentional (Implementation
-Plan §2: "a stub/mock provider for the rest, for parallel frontend
-development"), not a placeholder that got forgotten:
+`PAYMENTS_INTERNATIONAL_DRIVER` in `.env`) — this is intentional
+(Implementation Plan §2: "a stub/mock provider for the rest, for parallel
+frontend development"), not a placeholder that got forgotten:
 
-- `App\Domain\Vending\Providers\MockElectricityProvider` — generates a
-  realistic-looking token; set `transaction.meta.simulate_failure = true` to
-  test the retry → refund path.
-- `App\Domain\Payments\Providers\MockPaymentProcessor` — always succeeds
-  unless `transaction.meta.simulate_payment_failure = true`.
+- **Electricity vending is real** — `VENDING_ELECTRICITY_DRIVER=vtpass` uses
+  `VtpassElectricityProvider` against VTpass's actual sandbox/live API. See
+  [Electricity vending](#electricity-vending-vtpass) above. `mock`
+  (`MockElectricityProvider`) is still the default and remains useful for
+  frontend work and CI — set `transaction.meta.simulate_failure = true` to
+  test the retry → refund path without touching VTpass at all.
+- **Payments are still mocked** — `App\Domain\Payments\Providers\MockPaymentProcessor`
+  always succeeds unless `transaction.meta.simulate_payment_failure = true`.
+  No card/bank-transfer/USSD processor is integrated yet.
 - Notification channels (`SMS_DRIVER`, `WHATSAPP_DRIVER`) default to `log` —
   writes to `storage/logs/laravel.log` instead of calling a real gateway.
 
@@ -146,9 +197,14 @@ interface and a `match` arm in `VendingManager`/`PaymentManager`.
 
 ## Not yet wired up
 
+- **A payment processor** (Flutterwave/Paystack for domestic, a
+  Diaspora-Mode-capable processor for international) — still mocked, see above.
 - **Diaspora Mode multi-currency capture** — the `transactions.fx_rate` /
   `amount_ngn` columns and international payment routing exist; no real
   international processor is integrated.
+- **A VTpass webhook receiver + reconciliation job** for transactions that
+  stay "pending" through every bounded retry — see the note in
+  [Electricity vending](#electricity-vending-vtpass).
 - **WhatsApp Business API** — falls back to the `log` driver.
 - **PHPStan/Larastan static analysis** — TRD §10 calls for it in CI; not yet
   added to `composer.json`.

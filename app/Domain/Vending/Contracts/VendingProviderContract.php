@@ -2,7 +2,9 @@
 
 namespace App\Domain\Vending\Contracts;
 
+use App\Domain\Vending\DataTransferObjects\MeterVerificationResult;
 use App\Domain\Vending\DataTransferObjects\VendResult;
+use App\Models\Meter;
 use App\Models\Transaction;
 
 /**
@@ -14,6 +16,9 @@ use App\Models\Transaction;
 interface VendingProviderContract
 {
     public function vend(Transaction $transaction): VendResult;
+
+    /** Pre-purchase meter/customer lookup — shown before the user pays. */
+    public function verifyMeter(Meter $meter): MeterVerificationResult;
 
     /** Cheap reachability check feeding the Provider Health Dashboard. */
     public function healthCheck(): bool;

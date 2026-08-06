@@ -4,6 +4,7 @@ namespace App\Domain\Vending;
 
 use App\Domain\Vending\Contracts\VendingProviderContract;
 use App\Domain\Vending\Providers\MockElectricityProvider;
+use App\Domain\Vending\Providers\VtpassElectricityProvider;
 use App\Enums\ServiceType;
 use InvalidArgumentException;
 
@@ -26,6 +27,7 @@ class VendingManager
     {
         return match ($driver) {
             'mock' => app(MockElectricityProvider::class),
+            'vtpass' => app(VtpassElectricityProvider::class),
             default => throw new InvalidArgumentException("Unknown vending driver [{$driver}]."),
         };
     }

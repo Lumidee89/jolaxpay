@@ -12,8 +12,27 @@ return [
         'api_secret' => env('VENDING_ELECTRICITY_API_SECRET'),
     ],
 
+    // VTpass (https://vtpass.com/documentation/) — the live electricity
+    // vending driver. 'sandbox' and 'live' are fully separate accounts with
+    // separate keys; VTPASS_ENV picks which base URL + key set is active.
+    // Sandbox has its own pre-loaded wallet balance and behaves like the
+    // live API (per VTpass's own docs), so it's safe to point
+    // VENDING_ELECTRICITY_DRIVER=vtpass at it for real end-to-end testing.
+    'vtpass' => [
+        'env' => env('VTPASS_ENV', 'sandbox'), // sandbox | live
+        'base_url_sandbox' => 'https://sandbox.vtpass.com/api',
+        'base_url_live' => 'https://vtpass.com/api',
+        'api_key' => env('VTPASS_API_KEY'),
+        'public_key' => env('VTPASS_PUBLIC_KEY'), // GET requests: api-key + public-key
+        'secret_key' => env('VTPASS_SECRET_KEY'), // POST requests: api-key + secret-key
+        'timeout' => (int) env('VTPASS_TIMEOUT', 30),
+    ],
+
     // Bounded retry count before the Payment Flow falls back to a wallet
-    // refund (TRD §6).
+    // refund (TRD §6). For the vtpass driver, a retry past the first
+    // attempt requeries the same VTpass request_id rather than re-paying
+    // (see VtpassElectricityProvider) — VTpass's own guidance is to requery
+    // a "pending" transaction rather than resubmit it.
     'max_vend_attempts' => 3,
     'max_delivery_attempts' => 3,
 ];

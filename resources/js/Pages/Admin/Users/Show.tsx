@@ -71,12 +71,12 @@ export default function Show({ targetUser, sessions }: { targetUser: TargetUser;
 
             <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 py-8 sm:px-6 lg:grid-cols-3 lg:px-8">
                 <div className="space-y-6 lg:col-span-2">
-                    <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-100">
+                    <div className="rounded-xl bg-white p-6 shadow-card ring-1 ring-gray-900/5">
                         <h3 className="mb-4 font-medium text-gray-800">Recent transactions</h3>
                         <div className="divide-y divide-gray-50">
                             {targetUser.transactions.map((t) => (
                                 <div key={t.id} className="flex items-center justify-between py-2 text-sm">
-                                    <Link href={route('admin.transactions.show', t.id)} className="font-mono text-xs text-red-800 hover:underline">
+                                    <Link href={route('admin.transactions.show', t.id)} className="font-mono text-xs text-brand-700 hover:underline">
                                         {t.reference.slice(0, 8)}
                                     </Link>
                                     <span>
@@ -92,7 +92,7 @@ export default function Show({ targetUser, sessions }: { targetUser: TargetUser;
                         </div>
                     </div>
 
-                    <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-100">
+                    <div className="rounded-xl bg-white p-6 shadow-card ring-1 ring-gray-900/5">
                         <h3 className="mb-4 font-medium text-gray-800">Active device sessions</h3>
                         <div className="divide-y divide-gray-50">
                             {sessions.map((s) => (
@@ -117,7 +117,7 @@ export default function Show({ targetUser, sessions }: { targetUser: TargetUser;
                 </div>
 
                 <div className="space-y-6">
-                    <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-100">
+                    <div className="rounded-xl bg-white p-6 shadow-card ring-1 ring-gray-900/5">
                         <h3 className="mb-3 font-medium text-gray-800">Details</h3>
                         <p className="text-sm text-gray-800">{targetUser.email}</p>
                         <p className="text-sm text-gray-500">{targetUser.phone_number}</p>
@@ -129,7 +129,7 @@ export default function Show({ targetUser, sessions }: { targetUser: TargetUser;
                         </p>
                     </div>
 
-                    <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-100">
+                    <div className="rounded-xl bg-white p-6 shadow-card ring-1 ring-gray-900/5">
                         <h3 className="mb-3 font-medium text-gray-800">Wallets</h3>
                         {targetUser.wallets.map((w) => (
                             <div key={w.id} className="flex justify-between text-sm">
@@ -139,7 +139,7 @@ export default function Show({ targetUser, sessions }: { targetUser: TargetUser;
                         ))}
                     </div>
 
-                    <div className="space-y-2 rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-100">
+                    <div className="space-y-2 rounded-xl bg-white p-6 shadow-card ring-1 ring-gray-900/5">
                         <h3 className="mb-1 font-medium text-gray-800">Actions</h3>
                         <SecondaryButton onClick={resetPassword} className="w-full justify-center">
                             Reset password

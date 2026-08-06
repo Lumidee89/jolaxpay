@@ -40,6 +40,7 @@ Route::prefix('v1')->group(function () {
 
         Route::apiResource('meters', MeterController::class);
         Route::patch('meters/{meter}/favorite', [MeterController::class, 'toggleFavorite']);
+        Route::post('meters/verify', [MeterController::class, 'verify']);
 
         Route::apiResource('meter-groups', MeterGroupController::class)->only(['index', 'store', 'show', 'destroy']);
 

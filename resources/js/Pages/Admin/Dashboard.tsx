@@ -56,10 +56,10 @@ export default function Dashboard({ stats, recentTransactions }: Props) {
                     />
                 </div>
 
-                <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-100">
+                <div className="overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-gray-900/5">
                     <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
                         <h3 className="font-medium text-gray-800">Recent transactions</h3>
-                        <Link href={route('admin.transactions.index')} className="text-sm text-red-800 hover:underline">
+                        <Link href={route('admin.transactions.index')} className="text-sm text-brand-700 hover:underline">
                             View all
                         </Link>
                     </div>
@@ -79,7 +79,7 @@ export default function Dashboard({ stats, recentTransactions }: Props) {
                                     <td className="px-6 py-3">
                                         <Link
                                             href={route('admin.transactions.show', t.id)}
-                                            className="font-mono text-xs text-red-800 hover:underline"
+                                            className="font-mono text-xs text-brand-700 hover:underline"
                                         >
                                             {t.reference.slice(0, 8)}
                                         </Link>
