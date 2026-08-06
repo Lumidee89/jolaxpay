@@ -62,6 +62,12 @@ class User extends Authenticatable
         return $this->hasMany(MeterGroup::class);
     }
 
+    /** Saved airtime/data/cable_tv/education recipients — the non-electricity counterpart to meters(). */
+    public function beneficiaries(): HasMany
+    {
+        return $this->hasMany(Beneficiary::class);
+    }
+
     public function powerCircle(): HasMany
     {
         return $this->hasMany(PowerCircleContact::class);

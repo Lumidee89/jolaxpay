@@ -12,6 +12,17 @@ return [
         'api_secret' => env('VENDING_ELECTRICITY_API_SECRET'),
     ],
 
+    // The other four service types (PRD §7.1 Phase 2) are all
+    // biller-anchored (App\Models\Biller) rather than meter-anchored, and
+    // all route through the single generic VtpassBillerProvider — VTpass
+    // covers airtime/data/cable_tv/education under the same account and
+    // `/pay` shape (see App\Domain\Vending\Providers\VtpassBillerProvider),
+    // so each only needs its own driver toggle, not its own credential set.
+    'airtime' => ['driver' => env('VENDING_AIRTIME_DRIVER', 'mock')],
+    'data' => ['driver' => env('VENDING_DATA_DRIVER', 'mock')],
+    'cable_tv' => ['driver' => env('VENDING_CABLE_TV_DRIVER', 'mock')],
+    'education' => ['driver' => env('VENDING_EDUCATION_DRIVER', 'mock')],
+
     // VTpass (https://vtpass.com/documentation/) — the live electricity
     // vending driver. 'sandbox' and 'live' are fully separate accounts with
     // separate keys; VTPASS_ENV picks which base URL + key set is active.

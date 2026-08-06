@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BeneficiaryController;
+use App\Http\Controllers\Api\V1\BillerController;
 use App\Http\Controllers\Api\V1\MeterController;
 use App\Http\Controllers\Api\V1\MeterGroupController;
 use App\Http\Controllers\Api\V1\PowerCircleController;
@@ -43,6 +45,16 @@ Route::prefix('v1')->group(function () {
         Route::post('meters/verify', [MeterController::class, 'verify']);
 
         Route::apiResource('meter-groups', MeterGroupController::class)->only(['index', 'store', 'show', 'destroy']);
+
+        // Airtime/data/cable_tv/education — the biller-anchored services
+        // (ServiceType::isBillerBased()). `billers` is a public-ish catalog
+        // read (network/provider list + cached bundle prices); `beneficiaries`
+        // are the per-user saved recipients, mirroring `meters` above.
+        Route::get('billers', [BillerController::class, 'index']);
+        Route::post('billers/verify', [BillerController::class, 'verify']);
+
+        Route::apiResource('beneficiaries', BeneficiaryController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
+        Route::patch('beneficiaries/{beneficiary}/favorite', [BeneficiaryController::class, 'toggleFavorite']);
 
         Route::apiResource('power-circle', PowerCircleController::class)->only(['index', 'store', 'destroy']);
 

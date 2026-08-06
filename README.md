@@ -8,8 +8,10 @@ for the full product/technical spec this implements.
 
 This repo is the Phase 1 MVP scaffold per the Implementation Plan: the full
 domain layer, database schema, mobile API, and a working admin panel, all
-wired together and tested end-to-end. Electricity vending is a real
-integration (VTpass — see [Electricity vending](#electricity-vending-vtpass)
+wired together and tested end-to-end. Vending is a real integration — not
+just electricity, but airtime, data, cable TV, and education too, all via
+VTpass (see [Electricity vending](#electricity-vending-vtpass) and
+[Airtime, data, cable TV & education vending](#airtime-data-cable-tv--education-vending-also-vtpass)
 below); the payment processor is still mocked — see
 [Mocked vs. real](#mocked-vs-real).
 
@@ -73,10 +75,18 @@ Bearer-token auth via Sanctum. Full route list: `php artisan route:list --path=a
 Highlights:
 
 - `POST /v1/auth/register`, `/login` (new-device OTP challenge), `/logout`
-- `GET/POST /v1/meters`, `PATCH /v1/meters/{id}/favorite`
+- `GET/POST /v1/meters`, `PATCH /v1/meters/{id}/favorite` — electricity only
+- `GET /v1/billers`, `POST /v1/billers/verify` — the airtime/data/cable_tv/
+  education catalog (+ cached bundle prices) and their merchant-verify
+- `GET/POST /v1/beneficiaries`, `PATCH /v1/beneficiaries/{id}/favorite` —
+  saved airtime/data/cable_tv/education recipients (the non-electricity
+  counterpart to `meters`)
 - `POST /v1/transactions` — **requires an `Idempotency-Key` header** (TRD §8); a
   repeated key on the same route replays the original response instead of
-  double-charging.
+  double-charging. Works for every `service_type` — electricity needs
+  `meter_id`/`meter_group_id`, everything else needs `biller_id` (or a saved
+  `beneficiary_id`) plus `biller_identifier`/`variation_code` as that biller
+  requires.
 - `GET /v1/transactions/{id}/status` — polling fallback for the
   `private-transaction.{id}` broadcast channel
 - `POST /v1/transactions/{id}/outcome`, `GET /v1/transactions/{id}/receipt` (PDF)
@@ -121,6 +131,38 @@ A few things worth knowing before you flip the driver on:
   initiating a purchase to catch a mistyped meter number and show the
   customer's name up front.
 
+## Airtime, data, cable TV & education vending (also VTpass)
+
+The same VTpass account covers airtime, data, cable TV, and education pins
+(WAEC/JAMB) — `App\Domain\Vending\Providers\VtpassBillerProvider` is one
+driver for all four, since VTpass's request shape only varies by a handful
+of per-biller flags. Each service type has its own toggle so you can bring
+them up independently: `VENDING_AIRTIME_DRIVER`, `VENDING_DATA_DRIVER`,
+`VENDING_CABLE_TV_DRIVER`, `VENDING_EDUCATION_DRIVER` (all default `mock`;
+set to `vtpass` to activate against the credentials already configured
+above — no separate keys needed).
+
+Unlike electricity (meter-anchored), these four are **biller-anchored**
+(`App\Models\Biller`, seeded by `BillerSeeder` — verified against VTpass's
+own per-product docs, same as `DiscoSeeder`):
+
+- `Biller.api_provider_code` holds VTpass's `serviceID` (`mtn`, `mtn-data`,
+  `dstv`, `waec`, `jamb`, …). `requires_billers_code` / `requires_variation` /
+  `supports_verify` describe what that specific biller's `/pay` call needs —
+  airtime needs neither; data/cable_tv need both (`billersCode` = subscriber
+  phone or smartcard number, `variation_code` = bundle/bouquet); education
+  needs a `variation_code` always and a `billersCode` only for JAMB (its
+  Profile ID) — WAEC just needs the variation.
+- `biller_variations` caches VTpass's `GET /service-variations` (bundle/
+  bouquet/pin-type options + prices) so the mobile purchase form doesn't hit
+  VTpass on every load. Refresh it with `php artisan vtpass:sync-variations`
+  (scheduled daily in `routes/console.php` once a driver is live).
+- A saved `Beneficiary` (the non-electricity equivalent of a saved `Meter`)
+  supplies its `biller_id`/`identifier` by default on a purchase, still
+  overridable per-request.
+- Same requery-not-resubmit and pending-past-every-retry caveats as
+  electricity apply here too — see `VtpassBillerProvider`'s class docblock.
+
 ## Admin panel (`/admin`)
 
 No public registration — staff accounts are provisioned via:
@@ -152,7 +194,9 @@ button. See `resources/js/Components/ApplicationLogo.tsx` and
 app/Domain/
 ├── Identity/       OtpService (new-device login, password reset, high-value tx step-up)
 ├── Payments/       PaymentManager + PaymentProcessorContract (domestic/international)
-├── Vending/        VendingManager + VendingProviderContract (per DisCo/telecom)
+├── Vending/        VendingManager — VendingProviderContract (electricity,
+│                   per-DisCo) + BillerVendingProviderContract (airtime/
+│                   data/cable_tv/education, per-Biller)
 ├── Wallet/         LedgerService — double-entry ledger, the highest-priority
 │                   correctness surface in the app (see tests/Unit/Domain)
 ├── Notifications/  NotificationDispatcher (sms/email/whatsapp/in_app, logs every send)
@@ -175,17 +219,21 @@ automatic wallet refund.
 ## Mocked vs. real
 
 Both vending and payments ship behind a driver interface
-(`VENDING_ELECTRICITY_DRIVER`, `PAYMENTS_DOMESTIC_DRIVER`,
+(`VENDING_ELECTRICITY_DRIVER`, `VENDING_AIRTIME_DRIVER`, `VENDING_DATA_DRIVER`,
+`VENDING_CABLE_TV_DRIVER`, `VENDING_EDUCATION_DRIVER`, `PAYMENTS_DOMESTIC_DRIVER`,
 `PAYMENTS_INTERNATIONAL_DRIVER` in `.env`) — this is intentional
 (Implementation Plan §2: "a stub/mock provider for the rest, for parallel
 frontend development"), not a placeholder that got forgotten:
 
-- **Electricity vending is real** — `VENDING_ELECTRICITY_DRIVER=vtpass` uses
-  `VtpassElectricityProvider` against VTpass's actual sandbox/live API. See
-  [Electricity vending](#electricity-vending-vtpass) above. `mock`
-  (`MockElectricityProvider`) is still the default and remains useful for
-  frontend work and CI — set `transaction.meta.simulate_failure = true` to
-  test the retry → refund path without touching VTpass at all.
+- **All five vending categories are real** — electricity, airtime, data,
+  cable TV, and education each have their own `VENDING_*_DRIVER=vtpass`
+  toggle against VTpass's actual sandbox/live API. See
+  [Electricity vending](#electricity-vending-vtpass) and
+  [Airtime, data, cable TV & education vending](#airtime-data-cable-tv--education-vending-also-vtpass)
+  above. `mock` (`MockElectricityProvider`/`MockBillerProvider`) is still the
+  default per category and remains useful for frontend work and CI — set
+  `transaction.meta.simulate_failure = true` to test the retry → refund path
+  without touching VTpass at all.
 - **Payments are still mocked** — `App\Domain\Payments\Providers\MockPaymentProcessor`
   always succeeds unless `transaction.meta.simulate_payment_failure = true`.
   No card/bank-transfer/USSD processor is integrated yet.
@@ -204,7 +252,8 @@ interface and a `match` arm in `VendingManager`/`PaymentManager`.
   international processor is integrated.
 - **A VTpass webhook receiver + reconciliation job** for transactions that
   stay "pending" through every bounded retry — see the note in
-  [Electricity vending](#electricity-vending-vtpass).
+  [Electricity vending](#electricity-vending-vtpass) (applies to every
+  VTpass-backed service, not just electricity).
 - **WhatsApp Business API** — falls back to the `log` driver.
 - **PHPStan/Larastan static analysis** — TRD §10 calls for it in CI; not yet
   added to `composer.json`.
@@ -217,12 +266,15 @@ interface and a `match` arm in `VendingManager`/`PaymentManager`.
 php artisan test
 ```
 
-30 Pest tests covering: ledger correctness (credit/debit/insufficient-funds/
+53 Pest tests covering: ledger correctness (credit/debit/insufficient-funds/
 idempotent-refund/concurrent-debit), the transaction state machine (valid
 and invalid transitions, terminal-state protection), the full mobile
-purchase pipeline end-to-end (card and wallet payment, insufficient funds,
-auto-refund on simulated vend failure, idempotency-key replay, access
-control), and admin RBAC (guest redirect, role-based page access).
+purchase pipeline end-to-end for both electricity (card and wallet payment,
+insufficient funds, auto-refund on simulated vend failure, idempotency-key
+replay, access control) and the biller-anchored services (airtime, data
+with variation_code validation, saved beneficiaries), VTpass response
+parsing for every product family against VTpass's own documented example
+responses, and admin RBAC (guest redirect, role-based page access).
 
 `phpunit.xml` sets `QUEUE_CONNECTION=sync` and `BROADCAST_CONNECTION=null`
 for the test environment, so the full async pipeline runs inline within each

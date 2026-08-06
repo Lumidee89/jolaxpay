@@ -36,6 +36,10 @@
              parsing (see VtpassElectricityProviderTest) instantiate it
              directly with Http::fake(), bypassing this. -->
         <env name="VENDING_ELECTRICITY_DRIVER" value="mock"/>
+        <env name="VENDING_AIRTIME_DRIVER" value="mock"/>
+        <env name="VENDING_DATA_DRIVER" value="mock"/>
+        <env name="VENDING_CABLE_TV_DRIVER" value="mock"/>
+        <env name="VENDING_EDUCATION_DRIVER" value="mock"/>
         <env name="PAYMENTS_DOMESTIC_DRIVER" value="mock"/>
         <env name="PAYMENTS_INTERNATIONAL_DRIVER" value="mock"/>
         <env name="SMS_DRIVER" value="log"/>

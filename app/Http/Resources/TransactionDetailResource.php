@@ -36,6 +36,10 @@ class TransactionDetailResource extends JsonResource
             'outcome_confirmed' => $this->outcome_confirmed,
             'outcome_reason' => $this->outcome_reason,
             'meter' => MeterResource::make($this->whenLoaded('meter')),
+            'biller' => BillerResource::make($this->whenLoaded('biller')),
+            'beneficiary' => BeneficiaryResource::make($this->whenLoaded('beneficiary')),
+            'biller_identifier' => $this->biller_identifier,
+            'variation_code' => $this->variation_code,
             'status_history' => $this->whenLoaded('statusHistory', fn () => $this->statusHistory->map(fn ($h) => [
                 'from' => $h->from_status?->value,
                 'to' => $h->to_status->value,

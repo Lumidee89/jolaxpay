@@ -42,6 +42,7 @@ Route::prefix('admin')->group(function () {
         Route::middleware('permission:manage-providers')->group(function () {
             Route::get('providers', [ProviderController::class, 'index'])->name('admin.providers.index');
             Route::patch('providers/{disco}/health', [ProviderController::class, 'updateHealth'])->name('admin.providers.update-health');
+            Route::patch('billers/{biller}/health', [ProviderController::class, 'updateBillerHealth'])->name('admin.billers.update-health');
         });
 
         Route::middleware('permission:manage-support')->group(function () {

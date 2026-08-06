@@ -26,6 +26,11 @@
     <div class="row"><span>Status</span><span>{{ $transaction->status->label() }}</span></div>
     @if($transaction->meter)
         <div class="row"><span>Meter</span><span>{{ $transaction->meter->label }} ({{ $transaction->meter->meter_number }})</span></div>
+    @elseif($transaction->biller)
+        <div class="row"><span>{{ $transaction->biller->name }}</span><span>{{ $transaction->biller_identifier ?? $transaction->recipient_phone }}</span></div>
+        @if($transaction->variation_code)
+            <div class="row"><span>Plan</span><span>{{ $transaction->variation_code }}</span></div>
+        @endif
     @endif
     @if($transaction->token)
         <div class="row"><span>Token</span><strong>{{ $transaction->token }}</strong></div>

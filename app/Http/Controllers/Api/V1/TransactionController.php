@@ -25,7 +25,7 @@ class TransactionController extends Controller
     public function index(Request $request): JsonResponse
     {
         $transactions = $request->user()->transactions()
-            ->with('meter')
+            ->with(['meter', 'biller'])
             ->when($request->query('status'), fn ($q, $status) => $q->where('status', $status))
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 20));
@@ -55,7 +55,7 @@ class TransactionController extends Controller
     {
         $this->authorizeAccess($request, $transaction);
 
-        return response()->json(['data' => TransactionDetailResource::make($transaction->load(['meter', 'statusHistory']))]);
+        return response()->json(['data' => TransactionDetailResource::make($transaction->load(['meter', 'biller', 'beneficiary', 'statusHistory']))]);
     }
 
     /**
@@ -93,7 +93,7 @@ class TransactionController extends Controller
             ->count();
 
         $pdf = Pdf::loadView('receipts.transaction', [
-            'transaction' => $transaction->load('meter'),
+            'transaction' => $transaction->load(['meter', 'biller']),
             'purchaseCount' => $purchaseCount,
         ]);
 

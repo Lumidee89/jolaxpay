@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Vending\VendingManager;
-use App\Enums\ServiceType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreMeterRequest;
 use App\Http\Requests\Api\V1\UpdateMeterRequest;
@@ -90,7 +89,7 @@ class MeterController extends Controller
         ]);
         $transientMeter->setRelation('disco', $disco);
 
-        $result = $this->vending->driverFor(ServiceType::Electricity)->verifyMeter($transientMeter);
+        $result = $this->vending->electricityDriverFor()->verifyMeter($transientMeter);
 
         return response()->json([
             'valid' => $result->valid,

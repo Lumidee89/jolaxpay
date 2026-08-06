@@ -21,7 +21,8 @@ use Illuminate\Support\Str;
 // FormRequest input — see StoreTransactionRequest's much narrower rule
 // set), so mass-assignment guarding is not a security boundary for these.
 #[Fillable([
-    'user_id', 'meter_id', 'meter_group_id', 'service_type', 'amount', 'fee',
+    'user_id', 'meter_id', 'meter_group_id', 'biller_id', 'beneficiary_id',
+    'biller_identifier', 'variation_code', 'service_type', 'amount', 'fee',
     'currency', 'fx_rate', 'amount_ngn', 'payment_method', 'payment_reference',
     'delivery_destination', 'recipient_name', 'recipient_phone', 'recipient_email',
     'recipient_user_id', 'idempotency_key', 'meta', 'token', 'delivered_at',
@@ -72,6 +73,16 @@ class Transaction extends Model
     public function meterGroup(): BelongsTo
     {
         return $this->belongsTo(MeterGroup::class);
+    }
+
+    public function biller(): BelongsTo
+    {
+        return $this->belongsTo(Biller::class);
+    }
+
+    public function beneficiary(): BelongsTo
+    {
+        return $this->belongsTo(Beneficiary::class);
     }
 
     public function recipientUser(): BelongsTo

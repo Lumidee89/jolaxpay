@@ -42,8 +42,12 @@ interface TransactionDetail {
     vend_attempts: number;
     delivery_attempts: number;
     refunded_to_wallet: boolean;
+    biller_identifier: string | null;
+    variation_code: string | null;
     user: { id: number; full_name: string; email: string; phone_number: string };
     meter: { label: string; meter_number: string; disco: { name: string } | null } | null;
+    biller: { name: string; service_type: string; identifier_label: string | null } | null;
+    beneficiary: { label: string; identifier: string } | null;
     status_history: StatusHistoryEntry[];
     ledger_entries: LedgerEntry[];
     created_at: string;
@@ -96,8 +100,18 @@ export default function Show({ transaction }: { transaction: TransactionDetail }
                             <Row label="Amount" value={`${transaction.currency} ${Number(transaction.amount).toLocaleString()}`} />
                             <Row label="Fee" value={`${transaction.currency} ${Number(transaction.fee).toLocaleString()}`} />
                             <Row label="Payment method" value={transaction.payment_method ?? '—'} />
-                            <Row label="Meter" value={transaction.meter ? `${transaction.meter.label} (${transaction.meter.meter_number})` : '—'} />
-                            <Row label="DisCo" value={transaction.meter?.disco?.name ?? '—'} />
+                            {transaction.meter ? (
+                                <>
+                                    <Row label="Meter" value={`${transaction.meter.label} (${transaction.meter.meter_number})`} />
+                                    <Row label="DisCo" value={transaction.meter.disco?.name ?? '—'} />
+                                </>
+                            ) : (
+                                <>
+                                    <Row label="Biller" value={transaction.biller?.name ?? '—'} />
+                                    <Row label={transaction.biller?.identifier_label ?? 'Account'} value={transaction.beneficiary?.identifier ?? transaction.biller_identifier ?? '—'} />
+                                    {transaction.variation_code && <Row label="Plan / bundle" value={transaction.variation_code} />}
+                                </>
+                            )}
                             <Row label="Token" value={transaction.token ?? '—'} mono />
                             <Row label="Vend attempts" value={String(transaction.vend_attempts)} />
                             <Row label="Delivery attempts" value={String(transaction.delivery_attempts)} />

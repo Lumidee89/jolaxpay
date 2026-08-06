@@ -44,6 +44,23 @@ class TransactionFactory extends Factory
         });
     }
 
+    /**
+     * A biller-anchored (non-electricity) purchase — no meter, a Biller +
+     * billersCode instead. Chain `->for($biller)` to pin the biller
+     * relationship explicitly (as electricity tests do with meters) —
+     * this state deliberately doesn't generate its own Biller::factory(),
+     * since a nested sub-factory here would create an extra, unwanted row
+     * that a chained `for()` can't cleanly override.
+     */
+    public function forBiller(): static
+    {
+        return $this->state(fn () => [
+            'meter_id' => null,
+            'service_type' => ServiceType::Airtime,
+            'biller_identifier' => fake()->numerify('080########'),
+        ]);
+    }
+
     public function failed(): static
     {
         return $this->afterMaking(fn (Transaction $t) => $t->forceFill(['status' => TransactionStatus::Failed]));

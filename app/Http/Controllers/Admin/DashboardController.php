@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\TransactionStatus;
 use App\Http\Controllers\Controller;
+use App\Models\Biller;
 use App\Models\Disco;
 use App\Models\SupportTicket;
 use App\Models\Transaction;
@@ -33,7 +34,8 @@ class DashboardController extends Controller
                     TransactionStatus::OutcomeConfirmed->value,
                     TransactionStatus::Failed->value,
                 ])->where('updated_at', '<', now()->subMinutes(15))->count(),
-                'degraded_providers' => Disco::where('health_status', '!=', 'healthy')->where('is_active', true)->count(),
+                'degraded_providers' => Disco::where('health_status', '!=', 'healthy')->where('is_active', true)->count()
+                    + Biller::where('health_status', '!=', 'healthy')->where('is_active', true)->count(),
             ],
             'recentTransactions' => Transaction::with('user:id,full_name')
                 ->latest()

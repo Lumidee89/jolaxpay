@@ -16,6 +16,7 @@ use App\Enums\TransactionStatus;
 use App\Jobs\DeliverToken;
 use App\Jobs\ProcessTransactionPayment;
 use App\Jobs\ProcessVending;
+use App\Models\Beneficiary;
 use App\Models\Meter;
 use App\Models\Transaction;
 use App\Models\TransactionStatusHistory;
@@ -47,12 +48,19 @@ class TransactionService
     public function initiate(User $user, array $data): Transaction
     {
         $meter = isset($data['meter_id']) ? Meter::findOrFail($data['meter_id']) : null;
+        $beneficiary = isset($data['beneficiary_id']) ? Beneficiary::findOrFail($data['beneficiary_id']) : null;
+        // A saved beneficiary supplies its biller/identifier by default —
+        // still overridable by an explicit biller_id/biller_identifier in
+        // the request (StoreTransactionRequest requires one or the other).
+        $billerId = $data['biller_id'] ?? $beneficiary?->biller_id;
+        $billerIdentifier = $data['biller_identifier'] ?? $beneficiary?->identifier;
         $currency = $data['currency'] ?? 'NGN';
         $fee = $this->calculateFee($data['amount']);
 
         [$recipientName, $recipientPhone, $recipientEmail, $recipientUserId] = $this->resolveRecipient(
             $user,
             $meter,
+            $beneficiary,
             DeliveryDestination::from($data['delivery_destination'] ?? 'me'),
             $data,
         );
@@ -61,6 +69,10 @@ class TransactionService
             'user_id' => $user->id,
             'meter_id' => $meter?->id,
             'meter_group_id' => $data['meter_group_id'] ?? null,
+            'biller_id' => $billerId,
+            'beneficiary_id' => $beneficiary?->id,
+            'biller_identifier' => $billerIdentifier,
+            'variation_code' => $data['variation_code'] ?? null,
             'service_type' => ServiceType::from($data['service_type'] ?? 'electricity'),
             'amount' => $data['amount'],
             'fee' => $fee,
@@ -310,23 +322,26 @@ class TransactionService
     /**
      * @return array{0: ?string, 1: ?string, 2: ?string, 3: ?int} [name, phone, email, recipient_user_id]
      */
-    protected function resolveRecipient(User $buyer, ?Meter $meter, DeliveryDestination $destination, array $data): array
+    protected function resolveRecipient(User $buyer, ?Meter $meter, ?Beneficiary $beneficiary, DeliveryDestination $destination, array $data): array
     {
+        // DeliveryDestination::MeterOwner means "the person tied to the
+        // saved thing being topped up" — a Meter for electricity, a
+        // Beneficiary for everything else; whichever one this purchase has.
         $name = match ($destination) {
             DeliveryDestination::Me => $buyer->full_name,
-            DeliveryDestination::MeterOwner => $meter?->label ?? $data['recipient_name'] ?? null,
+            DeliveryDestination::MeterOwner => $meter?->label ?? $beneficiary?->label ?? $data['recipient_name'] ?? null,
             DeliveryDestination::SomeoneElse => $data['recipient_name'] ?? null,
         };
 
         $phone = match ($destination) {
             DeliveryDestination::Me => $buyer->phone_number,
-            DeliveryDestination::MeterOwner => $meter?->recipient_phone,
+            DeliveryDestination::MeterOwner => $meter?->recipient_phone ?? $beneficiary?->recipient_phone,
             DeliveryDestination::SomeoneElse => $data['recipient_phone'] ?? null,
         };
 
         $email = match ($destination) {
             DeliveryDestination::Me => $buyer->email,
-            DeliveryDestination::MeterOwner => $meter?->recipient_email,
+            DeliveryDestination::MeterOwner => $meter?->recipient_email ?? $beneficiary?->recipient_email,
             DeliveryDestination::SomeoneElse => $data['recipient_email'] ?? null,
         };
 

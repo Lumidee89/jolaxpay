@@ -13,6 +13,7 @@ interface TransactionRow {
     created_at: string;
     user: { full_name: string; email: string } | null;
     meter: { label: string; disco: { name: string } | null } | null;
+    biller: { name: string; service_type: string } | null;
 }
 
 interface Paginated<T> {
@@ -26,7 +27,8 @@ interface Paginated<T> {
 interface Props {
     transactions: Paginated<TransactionRow>;
     discos: { id: number; name: string }[];
-    filters: { status?: string; service_type?: string; disco_id?: string; search?: string };
+    billers: { id: number; name: string; service_type: string }[];
+    filters: { status?: string; service_type?: string; disco_id?: string; biller_id?: string; search?: string };
 }
 
 const STATUSES = [
@@ -34,7 +36,7 @@ const STATUSES = [
     'generating_token', 'token_generated', 'delivered', 'outcome_confirmed', 'failed',
 ];
 
-export default function Index({ transactions, discos, filters }: Props) {
+export default function Index({ transactions, discos, billers, filters }: Props) {
     const [search, setSearch] = useState(filters.search ?? '');
 
     const applyFilter = (key: string, value: string) => {
@@ -91,6 +93,19 @@ export default function Index({ transactions, discos, filters }: Props) {
                         ))}
                     </select>
 
+                    <select
+                        value={filters.biller_id ?? ''}
+                        onChange={(e) => applyFilter('biller_id', e.target.value)}
+                        className="rounded-md border-gray-300 text-sm shadow-sm focus:border-brand-600 focus:ring-brand-600"
+                    >
+                        <option value="">All billers</option>
+                        {billers.map((b) => (
+                            <option key={b.id} value={b.id}>
+                                {b.name} ({b.service_type.replace(/_/g, ' ')})
+                            </option>
+                        ))}
+                    </select>
+
                     <span className="ml-auto text-sm text-gray-500">{transactions.total} total</span>
                 </div>
 
@@ -100,7 +115,7 @@ export default function Index({ transactions, discos, filters }: Props) {
                             <tr>
                                 <th className="px-6 py-3">Reference</th>
                                 <th className="px-6 py-3">User</th>
-                                <th className="px-6 py-3">Meter / DisCo</th>
+                                <th className="px-6 py-3">Meter / Biller</th>
                                 <th className="px-6 py-3">Amount</th>
                                 <th className="px-6 py-3">Status</th>
                                 <th className="px-6 py-3">When</th>
@@ -122,7 +137,9 @@ export default function Index({ transactions, discos, filters }: Props) {
                                         <div className="text-xs text-gray-400">{t.user?.email}</div>
                                     </td>
                                     <td className="px-6 py-3">
-                                        {t.meter ? `${t.meter.label} · ${t.meter.disco?.name ?? '—'}` : '—'}
+                                        {t.meter
+                                            ? `${t.meter.label} · ${t.meter.disco?.name ?? '—'}`
+                                            : (t.biller?.name ?? '—')}
                                     </td>
                                     <td className="px-6 py-3">
                                         {t.currency} {Number(t.amount).toLocaleString()}

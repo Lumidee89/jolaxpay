@@ -22,6 +22,7 @@ class TransactionResource extends JsonResource
             'status_label' => $this->status->label(),
             'delivery_destination' => $this->delivery_destination,
             'meter' => MeterResource::make($this->whenLoaded('meter')),
+            'biller' => BillerResource::make($this->whenLoaded('biller')),
             'outcome_confirmed' => $this->outcome_confirmed,
             'created_at' => $this->created_at?->toIso8601String(),
         ];
