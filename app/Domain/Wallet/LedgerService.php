@@ -3,6 +3,7 @@
 namespace App\Domain\Wallet;
 
 use App\Domain\Wallet\Exceptions\InsufficientFundsException;
+use App\Domain\Wallet\Exceptions\InvalidTransferException;
 use App\Enums\LedgerEntryType;
 use App\Enums\LedgerReason;
 use App\Models\LedgerEntry;
@@ -25,8 +26,18 @@ class LedgerService
     {
         return Wallet::firstOrCreate(
             ['user_id' => $user->id, 'currency' => $currency],
-            ['balance' => 0],
+            ['balance' => 0, 'wallet_address' => $this->generateWalletAddress()],
         );
+    }
+
+    /** How another JolaxPay user sends this wallet money (see transfer()) — not the account's phone/email. */
+    protected function generateWalletAddress(): string
+    {
+        do {
+            $candidate = 'JLX'.Str::upper(Str::random(10));
+        } while (Wallet::where('wallet_address', $candidate)->exists());
+
+        return $candidate;
     }
 
     public function credit(
@@ -116,5 +127,64 @@ class LedgerService
         $transaction->update(['refunded_to_wallet' => true]);
 
         return $entry;
+    }
+
+    /**
+     * Wallet-to-wallet transfer by `wallet_address` (not phone/email —
+     * see Wallet::wallet_address). Both legs are written atomically: the
+     * sender's wallet is locked first, then the recipient's, in a fixed
+     * order (ascending wallet id) regardless of who initiated the
+     * transfer, so two concurrent opposite-direction transfers can never
+     * deadlock each other.
+     *
+     * @return array{sender: LedgerEntry, recipient: LedgerEntry}
+     *
+     * @throws InvalidTransferException
+     * @throws InsufficientFundsException
+     */
+    public function transfer(Wallet $sender, string $recipientWalletAddress, string $amount, ?string $note = null): array
+    {
+        $recipient = Wallet::where('wallet_address', $recipientWalletAddress)->first();
+
+        if (! $recipient) {
+            throw new InvalidTransferException('No wallet found with that address.');
+        }
+
+        if ($recipient->id === $sender->id) {
+            throw new InvalidTransferException('You cannot send money to your own wallet.');
+        }
+
+        if ($recipient->currency !== $sender->currency) {
+            throw new InvalidTransferException('The recipient wallet is in a different currency.');
+        }
+
+        return DB::transaction(function () use ($sender, $recipient, $amount, $note) {
+            // Fixed lock order avoids the classic "A locks 1-then-2 while B
+            // locks 2-then-1" deadlock between two simultaneous transfers.
+            [$firstId, $secondId] = $sender->id < $recipient->id
+                ? [$sender->id, $recipient->id]
+                : [$recipient->id, $sender->id];
+
+            Wallet::whereKey($firstId)->lockForUpdate()->firstOrFail();
+            Wallet::whereKey($secondId)->lockForUpdate()->firstOrFail();
+
+            $transferReference = (string) Str::uuid();
+
+            $senderEntry = $this->debit($sender, $amount, LedgerReason::TransferOut, null, [
+                'transfer_reference' => $transferReference,
+                'counterparty_wallet_address' => $recipient->wallet_address,
+                'counterparty_user_id' => $recipient->user_id,
+                'note' => $note,
+            ]);
+
+            $recipientEntry = $this->credit($recipient, $amount, LedgerReason::TransferIn, null, [
+                'transfer_reference' => $transferReference,
+                'counterparty_wallet_address' => $sender->wallet_address,
+                'counterparty_user_id' => $sender->user_id,
+                'note' => $note,
+            ]);
+
+            return ['sender' => $senderEntry, 'recipient' => $recipientEntry];
+        });
     }
 }

@@ -29,6 +29,30 @@ it('requires an Idempotency-Key header to initiate a purchase', function () {
     ])->assertStatus(422)->assertJsonPath('message', 'The Idempotency-Key header is required for this request.');
 });
 
+it('does not require amount_ngn on an ordinary NGN purchase, currency sent explicitly', function () {
+    // Regression: `required_if:currency,!=,NGN` isn't valid Laravel syntax
+    // (required_if only does exact-value matching) — it silently parsed as
+    // "required if currency equals '!=' or 'NGN'", wrongly requiring
+    // amount_ngn on exactly this request shape (what the mobile app sends).
+    $this->withHeader('Idempotency-Key', 'ngn-key-1')
+        ->postJson('/api/v1/transactions', [
+            'meter_id' => $this->meter->id,
+            'amount' => '5000',
+            'currency' => 'NGN',
+            'payment_method' => 'card',
+        ])->assertStatus(202);
+});
+
+it('requires amount_ngn for a non-NGN (Diaspora) purchase', function () {
+    $this->withHeader('Idempotency-Key', 'usd-key-1')
+        ->postJson('/api/v1/transactions', [
+            'meter_id' => $this->meter->id,
+            'amount' => '50',
+            'currency' => 'USD',
+            'payment_method' => 'card',
+        ])->assertStatus(422)->assertJsonValidationErrors('amount_ngn');
+});
+
 it('takes a card purchase all the way to delivered', function () {
     $response = $this->withHeader('Idempotency-Key', 'test-key-1')
         ->postJson('/api/v1/transactions', [

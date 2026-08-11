@@ -44,6 +44,7 @@
         <env name="PAYMENTS_INTERNATIONAL_DRIVER" value="mock"/>
         <env name="SMS_DRIVER" value="log"/>
         <env name="WHATSAPP_DRIVER" value="log"/>
+        <env name="AUTH_BYPASS_LOGIN_OTP" value="false"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

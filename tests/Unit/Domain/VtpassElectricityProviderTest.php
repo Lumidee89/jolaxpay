@@ -158,3 +158,32 @@ it('reports healthy only when the balance endpoint returns a balance', function 
     Http::assertSent(fn ($request) => $request->hasHeader('api-key', 'test-api-key')
         && $request->hasHeader('public-key', 'test-public-key'));
 });
+
+it('fetches and normalizes the live electricity services list', function () {
+    Http::fake([
+        'sandbox.vtpass.com/api/services*' => Http::response([
+            'response_description' => '000',
+            'content' => [
+                ['serviceID' => 'ikeja-electric', 'name' => 'Ikeja Electric', 'minimium_amount' => '100'],
+                ['serviceID' => 'eko-electric', 'name' => 'Eko Electricity Distribution Company', 'minimium_amount' => '100'],
+            ],
+        ], 200),
+    ]);
+
+    $services = $this->provider->fetchElectricityServices();
+
+    expect($services)->toHaveCount(2)
+        ->and($services[0])->toBe(['service_id' => 'ikeja-electric', 'name' => 'Ikeja Electric']);
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/services')
+        && $request['identifier'] === 'electricity-bill'
+        && $request->hasHeader('public-key', 'test-public-key'));
+});
+
+it('treats a non-array services response as a comm failure instead of throwing', function () {
+    Http::fake([
+        'sandbox.vtpass.com/api/services*' => Http::response('"Invalid Credentials."', 401),
+    ]);
+
+    expect($this->provider->fetchElectricityServices())->toBe([]);
+});

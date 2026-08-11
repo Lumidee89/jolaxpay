@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domain\Support\Events\SupportMessageSent;
 use App\Http\Controllers\Controller;
 use App\Models\SupportTicket;
 use Illuminate\Http\RedirectResponse;
@@ -37,13 +38,15 @@ class SupportTicketController extends Controller
     {
         $request->validate(['body' => 'required|string|max:5000']);
 
-        $supportTicket->messages()->create([
+        $message = $supportTicket->messages()->create([
             'author_id' => auth()->id(),
             'is_staff_reply' => true,
             'body' => $request->input('body'),
         ]);
 
         $supportTicket->update(['status' => 'pending']);
+
+        broadcast(new SupportMessageSent($message->load('author')))->toOthers();
 
         return back()->with('success', 'Reply sent.');
     }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Wallet\Exceptions\InsufficientFundsException;
+use App\Domain\Wallet\Exceptions\InvalidTransferException;
 use App\Domain\Wallet\LedgerService;
 use App\Enums\LedgerEntryType;
 use App\Enums\LedgerReason;
@@ -76,6 +77,58 @@ it('refunds a failed transaction to the wallet exactly once', function () {
     expect((float) $first->amount)->toBe(2030.0)
         ->and($second)->toBeNull()
         ->and((float) $wallet->fresh()->balance)->toBe(2030.0);
+});
+
+it('assigns a unique wallet_address on creation', function () {
+    $walletA = $this->ledger->walletFor($this->user);
+    $walletB = $this->ledger->walletFor(User::factory()->create());
+
+    expect($walletA->wallet_address)->toStartWith('JLX')
+        ->and($walletA->wallet_address)->not->toBe($walletB->wallet_address);
+});
+
+it('transfers between two wallets by address, debiting one and crediting the other', function () {
+    $sender = $this->ledger->walletFor($this->user);
+    $this->ledger->credit($sender, '1000.00', LedgerReason::WalletFunding);
+    $recipientUser = User::factory()->create();
+    $recipient = $this->ledger->walletFor($recipientUser);
+
+    $result = $this->ledger->transfer($sender, $recipient->wallet_address, '400.00', 'Rent');
+
+    expect((float) $sender->fresh()->balance)->toBe(600.0)
+        ->and((float) $recipient->fresh()->balance)->toBe(400.0)
+        ->and($result['sender']->reason)->toBe(LedgerReason::TransferOut)
+        ->and($result['recipient']->reason)->toBe(LedgerReason::TransferIn)
+        ->and($result['sender']->meta['transfer_reference'])->toBe($result['recipient']->meta['transfer_reference']);
+});
+
+it('refuses a transfer to an unknown wallet address', function () {
+    $sender = $this->ledger->walletFor($this->user);
+    $this->ledger->credit($sender, '1000.00', LedgerReason::WalletFunding);
+
+    $this->ledger->transfer($sender, 'JLXNOSUCHADDR', '100.00');
+})->throws(InvalidTransferException::class);
+
+it('refuses a transfer to your own wallet', function () {
+    $sender = $this->ledger->walletFor($this->user);
+    $this->ledger->credit($sender, '1000.00', LedgerReason::WalletFunding);
+
+    $this->ledger->transfer($sender, $sender->wallet_address, '100.00');
+})->throws(InvalidTransferException::class);
+
+it('refuses a transfer larger than the sender balance, leaving both wallets untouched', function () {
+    $sender = $this->ledger->walletFor($this->user);
+    $this->ledger->credit($sender, '100.00', LedgerReason::WalletFunding);
+    $recipient = $this->ledger->walletFor(User::factory()->create());
+
+    try {
+        $this->ledger->transfer($sender, $recipient->wallet_address, '500.00');
+    } catch (InsufficientFundsException) {
+        // expected
+    }
+
+    expect((float) $sender->fresh()->balance)->toBe(100.0)
+        ->and((float) $recipient->fresh()->balance)->toBe(0.0);
 });
 
 it('never lets concurrent debits push a wallet negative', function () {

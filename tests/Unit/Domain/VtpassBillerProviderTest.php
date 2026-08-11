@@ -36,7 +36,9 @@ it('vends airtime with no billersCode or variation_code', function () {
     ]);
 
     $biller = Biller::factory()->create(['api_provider_code' => 'mtn', 'requires_billers_code' => false, 'requires_variation' => false]);
-    $transaction = Transaction::factory()->forBiller()->for($biller)->create(['amount' => '20.00', 'recipient_phone' => '08011111111']);
+    $transaction = Transaction::factory()->forBiller()->for($biller)->create([
+        'amount' => '20.00', 'biller_identifier' => '08011111111', 'recipient_phone' => '08011111111',
+    ]);
 
     $result = $this->provider->vend($transaction);
 
@@ -47,6 +49,32 @@ it('vends airtime with no billersCode or variation_code', function () {
         && $request['phone'] === '08011111111'
         && ! isset($request['billersCode'])
         && ! isset($request['variation_code']));
+});
+
+it('recharges the number the customer entered, not the buyer\'s own account phone', function () {
+    // Regression: for delivery_destination = "me", recipient_phone
+    // resolves to the *buyer's own* phone_number — using it ahead of
+    // biller_identifier meant an airtime purchase silently recharged the
+    // account owner's line instead of whatever number was actually typed
+    // into the purchase form.
+    Http::fake([
+        'sandbox.vtpass.com/api/pay' => Http::response([
+            'code' => '000',
+            'content' => ['transactions' => ['status' => 'delivered']],
+            'response_description' => 'TRANSACTION SUCCESSFUL',
+        ], 200),
+    ]);
+
+    $biller = Biller::factory()->create(['api_provider_code' => 'mtn', 'requires_billers_code' => false, 'requires_variation' => false]);
+    $transaction = Transaction::factory()->forBiller()->for($biller)->create([
+        'amount' => '20.00',
+        'biller_identifier' => '08099999999', // the number the customer typed in
+        'recipient_phone' => '08011111111', // the buyer's own account phone
+    ]);
+
+    $this->provider->vend($transaction);
+
+    Http::assertSent(fn ($request) => $request['phone'] === '08099999999');
 });
 
 it('vends data with billersCode (subscriber phone) and variation_code', function () {

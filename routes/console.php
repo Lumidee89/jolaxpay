@@ -16,3 +16,7 @@ Schedule::command('purchases:evaluate-scheduled')->everyFiveMinutes()->withoutOv
 // VTpass's data/cable_tv/education bundle catalog and pricing change from
 // time to time — keep the cached `biller_variations` table fresh.
 Schedule::command('vtpass:sync-variations')->daily()->withoutOverlapping();
+
+// The DisCo catalog itself changes rarely (a new distributor, a rename) —
+// weekly is plenty. See SyncDiscosFromVtpass for what this does and doesn't touch.
+Schedule::command('vtpass:sync-discos')->weekly()->withoutOverlapping();

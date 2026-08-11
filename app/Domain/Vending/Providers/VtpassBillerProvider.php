@@ -50,7 +50,21 @@ class VtpassBillerProvider implements BillerVendingProviderContract
         $requestId = $this->generateRequestId();
         $transaction->update(['meta' => [...($transaction->meta ?? []), 'vtpass_request_id' => $requestId]]);
 
-        $phone = $transaction->recipient_phone ?: $transaction->biller_identifier ?: $transaction->user->phone_number;
+        // For airtime, `biller_identifier` *is* the phone number being
+        // recharged (Biller::requires_billers_code = false there, so
+        // there's no separate billersCode field for it to land in below —
+        // it only ever reaches VTpass via this `phone` param). Using
+        // `recipient_phone` first was wrong: for delivery_destination =
+        // "me" that resolves to the *buyer's own* phone_number, which
+        // silently recharged the account owner's line instead of whatever
+        // number the customer actually entered. Every other service type
+        // here (data/cable_tv/education-jamb) already sends the entered
+        // number as `billersCode` below, so `phone` there is genuinely
+        // just a contact field and recipient_phone/the buyer's own number
+        // are fine.
+        $phone = (! $biller->requires_billers_code && $transaction->biller_identifier)
+            ? $transaction->biller_identifier
+            : ($transaction->recipient_phone ?: $transaction->user->phone_number);
 
         $payload = [
             'request_id' => $requestId,
@@ -103,9 +117,18 @@ class VtpassBillerProvider implements BillerVendingProviderContract
         $canVend = array_key_exists('Can_Vend', $content) ? ($content['Can_Vend'] === 'yes') : true;
 
         if (($response['code'] ?? null) !== '000' || $wrongBillersCode || ! $canVend || empty($content['Customer_Name'])) {
+            // See VtpassElectricityProvider::verifyMeter()'s equivalent log
+            // line — a rejected verify is a normal outcome, not a comm
+            // failure, but still worth a trace of *why* VTpass said no.
+            Log::info('VTpass merchant-verify rejected', [
+                'billersCode' => $identifier,
+                'serviceID' => $biller->api_provider_code,
+                'response' => $response,
+            ]);
+
             return new MeterVerificationResult(
                 valid: false,
-                message: $response['response_description'] ?? 'This number could not be verified. Double-check it and try again.',
+                message: $response['response_description'] ?? $content['error'] ?? 'This number could not be verified. Double-check it and try again.',
                 raw: $response,
             );
         }
@@ -163,7 +186,13 @@ class VtpassBillerProvider implements BillerVendingProviderContract
         return $this->post('/requery', ['request_id' => $requestId]);
     }
 
-    /** @return array<string, mixed>|null null on a network/communication failure. */
+    /**
+     * @return array<string, mixed>|null null on a network/communication
+     * failure, or when VTpass responds with something other than a JSON
+     * object — e.g. a bare quoted string like `"Invalid Credentials."` on
+     * a 401, which isn't an `array` and would otherwise crash this
+     * method's own `?array` return type instead of being logged plainly.
+     */
     protected function post(string $path, array $body): ?array
     {
         try {
@@ -172,7 +201,18 @@ class VtpassBillerProvider implements BillerVendingProviderContract
                 ->timeout($this->timeout())
                 ->post($path, $body);
 
-            return $response->json();
+            $decoded = $response->json();
+
+            if (! is_array($decoded)) {
+                Log::error("VTpass {$path} returned an unexpected (non-JSON-object) response", [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return null;
+            }
+
+            return $decoded;
         } catch (Throwable $e) {
             Log::error("VTpass {$path} request failed", ['error' => $e->getMessage(), 'body' => $body]);
 
@@ -216,6 +256,12 @@ class VtpassBillerProvider implements BillerVendingProviderContract
             // emergency, not a customer-facing problem. Critical so ops
             // monitoring can't miss it (mirrors VtpassElectricityProvider).
             Log::critical('VTpass wallet balance is low — vending will keep failing until topped up.', ['response' => $data]);
+        } elseif ($code !== '000') {
+            // Any other rejection (e.g. code 028 "PRODUCT IS NOT
+            // WHITELISTED ON YOUR ACCOUNT", an account-configuration
+            // problem, not a customer one) — logged so the *why* isn't
+            // only discoverable by manually requerying VTpass by hand.
+            Log::warning("VTpass vend rejected (code {$code})", ['request_id' => $requestId, 'response' => $data]);
         }
 
         return new VendResult(

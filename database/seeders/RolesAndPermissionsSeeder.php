@@ -27,6 +27,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage-referrals',      // reward issuance, abuse flags
             'manage-users',          // password reset, device de-auth, fraud flags
             'view-reconciliation',   // ledger vs. processor/provider settlement
+            'manage-fraud',          // review/dismiss auto-generated FraudFlag rows
         ];
 
         foreach ($permissions as $permission) {
@@ -37,7 +38,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $superAdmin->syncPermissions($permissions);
 
         $ops = Role::firstOrCreate(['name' => 'ops', 'guard_name' => 'web']);
-        $ops->syncPermissions(['view-dashboard', 'manage-transactions', 'manage-providers', 'view-reconciliation']);
+        $ops->syncPermissions(['view-dashboard', 'manage-transactions', 'manage-providers', 'view-reconciliation', 'manage-fraud']);
 
         $support = Role::firstOrCreate(['name' => 'support', 'guard_name' => 'web']);
         $support->syncPermissions(['view-dashboard', 'manage-support']);

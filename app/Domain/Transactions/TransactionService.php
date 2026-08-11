@@ -2,8 +2,10 @@
 
 namespace App\Domain\Transactions;
 
+use App\Domain\Fraud\FraudCheckService;
 use App\Domain\Notifications\NotificationDispatcher;
 use App\Domain\Payments\PaymentManager;
+use App\Domain\Payments\PaystackGateway;
 use App\Domain\Vending\VendingManager;
 use App\Domain\Wallet\Exceptions\InsufficientFundsException;
 use App\Domain\Wallet\LedgerService;
@@ -38,6 +40,8 @@ class TransactionService
         private readonly VendingManager $vendingManager,
         private readonly LedgerService $ledger,
         private readonly NotificationDispatcher $notifier,
+        private readonly PaystackGateway $paystack,
+        private readonly FraudCheckService $fraud,
     ) {}
 
     /**
@@ -104,11 +108,71 @@ class TransactionService
             'note' => 'Fee and total disclosed to buyer before confirmation.',
         ]);
 
+        // PRD §15: detective, not preventive — never allowed to block a
+        // purchase (TRD §8 degrade-gracefully principle, same reasoning as
+        // TransactionStateMachine's broadcast-failure try/catch).
+        try {
+            $this->fraud->evaluate($transaction);
+        } catch (\Throwable $e) {
+            Log::warning('Fraud check failed to run; purchase proceeds unflagged.', [
+                'transaction_id' => $transaction->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         $this->stateMachine->transition($transaction, TransactionStatus::PaymentInitiated, 'Payment confirmed by user; processor call queued.', $user);
 
-        ProcessTransactionPayment::dispatch($transaction);
+        // A card payment routed through Paystack is a hosted-checkout
+        // redirect, not something to capture inline — the buyer pays on
+        // Paystack's page and a webhook (PaystackWebhookController) tells
+        // us it succeeded, at which point *that* dispatches
+        // ProcessTransactionPayment. Everything else (wallet, or 'card'
+        // while PAYMENTS_DOMESTIC_DRIVER is still 'mock') keeps working
+        // exactly as before: dispatch immediately.
+        if ($this->requiresPaystackRedirect($transaction)) {
+            $this->initializePaystackCheckout($transaction, $user);
+        } else {
+            ProcessTransactionPayment::dispatch($transaction);
+        }
 
         return $transaction->fresh();
+    }
+
+    protected function requiresPaystackRedirect(Transaction $transaction): bool
+    {
+        return $transaction->payment_method !== 'wallet'
+            && $transaction->currency === config('payments.domestic_currency', 'NGN')
+            && config('payments.domestic.driver') === 'paystack';
+    }
+
+    /**
+     * Stashes the Paystack authorization_url on `transaction.meta` for the
+     * mobile app to open in a checkout WebView, and the reference so the
+     * webhook can find its way back to this transaction. If Paystack can't
+     * even be reached to start the checkout, fails fast rather than
+     * leaving the buyer stuck on a transaction with no way to pay it.
+     */
+    protected function initializePaystackCheckout(Transaction $transaction, User $user): void
+    {
+        $reference = 'txn-'.$transaction->reference;
+        $amountKobo = (int) round(((float) $transaction->total()) * 100);
+
+        $init = $this->paystack->initializeTransaction($user->email, $amountKobo, $reference, [
+            'transaction_id' => $transaction->id,
+            'purpose' => 'transaction',
+        ]);
+
+        if (! $init) {
+            $this->fail($transaction, 'Could not start card payment — please try again.');
+
+            return;
+        }
+
+        $transaction->update(['meta' => [
+            ...($transaction->meta ?? []),
+            'paystack_reference' => $reference,
+            'paystack_authorization_url' => $init['authorization_url'],
+        ]]);
     }
 
     public function calculateFee(string $amount): string
@@ -116,7 +180,12 @@ class TransactionService
         return bcmul($amount, (string) config('payments.convenience_fee_rate', '0.015'), 2);
     }
 
-    /** Called from ProcessTransactionPayment. */
+    /**
+     * Called from ProcessTransactionPayment — either immediately after
+     * initiate() (wallet, or 'card' while still on the mock driver), or
+     * from PaystackWebhookController once a `charge.success` webhook
+     * confirms a hosted-checkout payment actually went through.
+     */
     public function processPayment(Transaction $transaction): void
     {
         if ($transaction->payment_method === 'wallet') {
@@ -128,6 +197,10 @@ class TransactionService
 
                 return;
             }
+        } elseif ($transaction->meta['paystack_reference'] ?? null) {
+            // Paystack already confirmed this via webhook before this job
+            // ran — nothing left to charge, just record the reference.
+            $transaction->update(['payment_reference' => $transaction->meta['paystack_reference']]);
         } else {
             $result = $this->paymentManager->driverFor($transaction)->charge($transaction);
 
@@ -214,9 +287,14 @@ class TransactionService
         $transaction->update(['delivery_channel' => $channel]);
 
         // Buyer always gets payment/delivery confirmation regardless of who received the token (PRD §7.3).
+        // `service_type` rides along on both notifications so
+        // NotificationLogResource can render service-appropriate wording
+        // ("token" only makes sense for electricity/education — airtime/
+        // data/cable_tv are a direct recharge, not a token to redeem).
         $this->notifier->send($transaction->user, 'payment_confirmation', DeliveryChannel::InApp, [
             'transaction_id' => $transaction->id,
             'reference' => $transaction->reference,
+            'service_type' => $transaction->service_type->value,
         ]);
 
         $recipientUser = $transaction->recipientUser;
@@ -225,6 +303,7 @@ class TransactionService
             $this->notifier->send($recipientUser, 'token_delivery', DeliveryChannel::InApp, [
                 'transaction_id' => $transaction->id,
                 'token' => $transaction->token,
+                'service_type' => $transaction->service_type->value,
             ]);
 
             return;
@@ -236,6 +315,7 @@ class TransactionService
             'recipient_phone' => $transaction->recipient_phone,
             'recipient_email' => $transaction->recipient_email,
             'token' => $transaction->token,
+            'service_type' => $transaction->service_type->value,
         ]);
     }
 

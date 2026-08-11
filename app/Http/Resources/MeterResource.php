@@ -16,6 +16,7 @@ class MeterResource extends JsonResource
             'meter_number' => $this->meter_number,
             'meter_type' => $this->meter_type,
             'is_favorite' => $this->is_favorite,
+            'is_saved' => $this->is_saved,
             'recipient_phone' => $this->recipient_phone,
             'recipient_email' => $this->recipient_email,
             'disco' => DiscoResource::make($this->whenLoaded('disco')),

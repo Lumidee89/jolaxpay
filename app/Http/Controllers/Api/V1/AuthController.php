@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Identity\OtpService;
+use App\Domain\Referrals\ReferralService;
 use App\Domain\Wallet\LedgerService;
 use App\Enums\DeliveryChannel;
 use App\Enums\OtpPurpose;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\LoginRequest;
 use App\Http\Requests\Api\V1\RegisterRequest;
+use App\Http\Requests\Api\V1\UpdateProfileRequest;
 use App\Http\Requests\Api\V1\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
@@ -16,6 +18,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -28,6 +32,7 @@ class AuthController extends Controller
     public function __construct(
         private readonly LedgerService $ledger,
         private readonly OtpService $otp,
+        private readonly ReferralService $referrals,
     ) {}
 
     public function register(RegisterRequest $request): JsonResponse
@@ -41,9 +46,11 @@ class AuthController extends Controller
             'password' => $data['password'],
             'country_code' => $data['country_code'] ?? 'NG',
             'is_diaspora' => isset($data['country_code']) && $data['country_code'] !== 'NG',
+            'account_type' => $data['account_type'] ?? 'individual',
         ]);
 
         $this->ledger->walletFor($user);
+        $this->referrals->redeem($user, $data['referral_code'] ?? null);
 
         $token = $user->createToken($data['device_name'])->plainTextToken;
 
@@ -76,7 +83,11 @@ class AuthController extends Controller
 
         $isKnownDevice = $user->tokens()->where('name', $data['device_name'])->exists();
 
-        if (! $isKnownDevice) {
+        // config/identity.php: a temporary escape hatch for use before a
+        // real SMS_DRIVER exists (until then, OTP codes only reach the log
+        // file, blocking anyone without server access). Off by default —
+        // see that config file's docblock before relying on this.
+        if (! $isKnownDevice && ! config('identity.bypass_login_otp')) {
             $this->otp->issue($user->phone_number, OtpPurpose::NewDeviceLogin, DeliveryChannel::Sms, $user);
 
             return response()->json([
@@ -87,7 +98,14 @@ class AuthController extends Controller
             ]);
         }
 
-        // Recognised device: rotate its token so old sessions can't linger indefinitely.
+        if (! $isKnownDevice) {
+            Log::warning('Login OTP bypassed via AUTH_BYPASS_LOGIN_OTP — new device logged straight in.', [
+                'user_id' => $user->id,
+                'device_name' => $data['device_name'],
+            ]);
+        }
+
+        // Recognised device (or the OTP challenge is bypassed): rotate its token so old sessions can't linger indefinitely.
         $user->tokens()->where('name', $data['device_name'])->delete();
         $token = $user->createToken($data['device_name'])->plainTextToken;
 
@@ -136,5 +154,47 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         return response()->json(['user' => UserResource::make($request->user())]);
+    }
+
+    /**
+     * Edits name/email/phone for the authenticated mobile user. Changing
+     * email or phone drops that field's verified_at — same rule the admin
+     * profile form (ProfileController::update) already applies — since the
+     * new value hasn't actually been proven to belong to this user yet.
+     */
+    public function updateProfile(UpdateProfileRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        $user->fill($request->validated());
+
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
+        }
+        if ($user->isDirty('phone_number')) {
+            $user->phone_verified_at = null;
+        }
+
+        $user->save();
+
+        return response()->json(['user' => UserResource::make($user)]);
+    }
+
+    /** Store a small profile image for the authenticated mobile user. */
+    public function uploadAvatar(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $user = $request->user();
+        $previousPath = $user->avatar_path;
+        $user->avatar_path = $data['avatar']->store("avatars/{$user->id}", 'uploads');
+        $user->save();
+
+        if ($previousPath) {
+            Storage::disk('uploads')->delete($previousPath);
+        }
+
+        return response()->json(['user' => UserResource::make($user)]);
     }
 }

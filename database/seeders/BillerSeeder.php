@@ -36,7 +36,10 @@ class BillerSeeder extends Seeder
             ['name' => 'StarTimes', 'code' => 'STARTIMES', 'service_type' => 'cable_tv', 'vtpass' => 'startimes', 'label' => 'Smartcard number', 'billers_code' => true, 'variation' => true, 'verify' => true],
             ['name' => 'Showmax', 'code' => 'SHOWMAX', 'service_type' => 'cable_tv', 'vtpass' => 'showmax', 'label' => 'Phone number', 'billers_code' => true, 'variation' => true],
 
-            // Education: WAEC Result Checker needs only a variation_code (pin type); JAMB needs a Profile ID and supports verify.
+            // Education: WAEC Registration and WAEC Result Checker both need only a
+            // variation_code (registration type / pin type) and a phone number — no
+            // billersCode; JAMB needs a Profile ID as billersCode and supports verify.
+            ['name' => 'WAEC Registration', 'code' => 'WAEC_REG', 'service_type' => 'education', 'vtpass' => 'waec-registration', 'label' => null, 'variation' => true],
             ['name' => 'WAEC Result Checker', 'code' => 'WAEC', 'service_type' => 'education', 'vtpass' => 'waec', 'label' => null, 'variation' => true],
             ['name' => 'JAMB Pin Vending', 'code' => 'JAMB', 'service_type' => 'education', 'vtpass' => 'jamb', 'label' => 'JAMB Profile ID', 'billers_code' => true, 'variation' => true, 'verify' => true],
         ];

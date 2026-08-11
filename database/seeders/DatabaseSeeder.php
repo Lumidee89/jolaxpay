@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
             DiscoSeeder::class,
             BillerSeeder::class,
+            FaqArticleSeeder::class,
             DemoDataSeeder::class,
         ]);
     }

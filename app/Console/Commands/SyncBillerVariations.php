@@ -14,8 +14,14 @@ use Illuminate\Console\Command;
  * pin types) — VTpass's bundle catalog and pricing change from time to
  * time, and the mobile app reads the cached copy rather than hitting
  * VTpass on every purchase-form load. Safe to run repeatedly (schedule it
- * daily once VENDING_*_DRIVER=vtpass is live) — existing rows are updated
- * in place, not duplicated.
+ * daily once VENDING_*_DRIVER=vtpass is live): existing rows are updated
+ * in place, not duplicated, and — like SyncDiscosFromVtpass does for
+ * discos — any row VTpass stops returning for a biller is marked
+ * `is_active = false` rather than left behind. That matters here more
+ * than it might seem: a stale row (e.g. a leftover MockBillerProvider
+ * `mock-small`/`mock-large` entry from testing against the mock driver
+ * before real VTpass credentials existed) would otherwise sit in the
+ * catalog indefinitely and could be selected for a real purchase.
  */
 class SyncBillerVariations extends Command
 {
@@ -45,7 +51,11 @@ class SyncBillerVariations extends Command
                 continue;
             }
 
+            $seenCodes = [];
+
             foreach ($variations as $variation) {
+                $seenCodes[] = $variation['variation_code'];
+
                 BillerVariation::updateOrCreate(
                     ['biller_id' => $biller->id, 'variation_code' => $variation['variation_code']],
                     [
@@ -57,7 +67,12 @@ class SyncBillerVariations extends Command
                 );
             }
 
-            $this->info("{$biller->name}: synced ".count($variations).' variation(s).');
+            $retired = BillerVariation::where('biller_id', $biller->id)
+                ->where('is_active', true)
+                ->whereNotIn('variation_code', $seenCodes)
+                ->update(['is_active' => false]);
+
+            $this->info("{$biller->name}: synced ".count($variations)." variation(s), retired {$retired}.");
         }
 
         return self::SUCCESS;

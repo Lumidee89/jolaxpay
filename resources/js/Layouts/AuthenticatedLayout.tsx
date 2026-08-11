@@ -9,12 +9,16 @@ import { PropsWithChildren, ReactNode, useState } from 'react';
 /** JolaxPay Admin shell — the only web client here is staff (TRD §2.2, §7). */
 const NAV_ITEMS: Array<{ label: string; route: string; permission?: string }> = [
     { label: 'Dashboard', route: 'dashboard' },
+    { label: 'Analytics', route: 'admin.analytics.index' },
     { label: 'Transactions', route: 'admin.transactions.index' },
     { label: 'Providers', route: 'admin.providers.index', permission: 'manage-providers' },
     { label: 'Support', route: 'admin.support.index', permission: 'manage-support' },
+    { label: 'FAQ', route: 'admin.faq.index', permission: 'manage-support' },
     { label: 'Referrals', route: 'admin.referrals.index', permission: 'manage-referrals' },
+    { label: 'Fraud', route: 'admin.fraud.index', permission: 'manage-fraud' },
     { label: 'Users', route: 'admin.users.index', permission: 'manage-users' },
     { label: 'Reconciliation', route: 'admin.reconciliation.index', permission: 'view-reconciliation' },
+    { label: 'Wallet Activity', route: 'admin.wallet-activity.index', permission: 'view-reconciliation' },
 ];
 
 export default function Authenticated({

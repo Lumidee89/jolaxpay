@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['user_id', 'balance', 'currency'])]
+#[Fillable(['user_id', 'wallet_address', 'balance', 'currency'])]
 class Wallet extends Model
 {
     use HasFactory;

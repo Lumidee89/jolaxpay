@@ -12,6 +12,7 @@ class WalletResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'wallet_address' => $this->wallet_address,
             'balance' => (float) $this->balance,
             'currency' => $this->currency,
             'updated_at' => $this->updated_at?->toIso8601String(),

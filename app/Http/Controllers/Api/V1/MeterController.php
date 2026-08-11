@@ -21,6 +21,7 @@ class MeterController extends Controller
     public function index(Request $request): JsonResponse
     {
         $meters = $request->user()->meters()
+            ->where('is_saved', true)
             ->with('disco')
             ->orderByDesc('is_favorite')
             ->orderByDesc('created_at')
@@ -31,7 +32,17 @@ class MeterController extends Controller
 
     public function store(StoreMeterRequest $request): JsonResponse
     {
-        $meter = $request->user()->meters()->create($request->validated());
+        $data = $request->validated();
+        $meter = $request->user()->meters()->firstOrCreate(
+            ['meter_number' => $data['meter_number']],
+            $data,
+        );
+
+        // A previously one-time meter becomes visible in saved meters when
+        // the user explicitly chooses to save it on a later purchase.
+        if (($data['is_saved'] ?? false) && ! $meter->is_saved) {
+            $meter->update([...$data, 'is_saved' => true]);
+        }
 
         // create() doesn't reflect column defaults applied at the DB level
         // (meter_type, is_favorite) — refresh so the response is accurate.

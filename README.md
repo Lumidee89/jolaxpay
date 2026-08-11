@@ -90,7 +90,13 @@ Highlights:
 - `GET /v1/transactions/{id}/status` — polling fallback for the
   `private-transaction.{id}` broadcast channel
 - `POST /v1/transactions/{id}/outcome`, `GET /v1/transactions/{id}/receipt` (PDF)
-- `GET /v1/wallet`, `POST /v1/wallet/fund`
+- `POST /v1/transactions/{id}/repeat` — re-runs a past purchase's meter/
+  biller/amount/recipient as a fresh transaction (payment_method optionally
+  overridable), through the exact same `initiate()` path as a new purchase
+- `GET /v1/wallet`, `POST /v1/wallet/fund`, `POST /v1/wallet/transfer` (by
+  `wallet_address`), `GET /v1/wallet/fund/{reference}/status`
+- `GET /v1/withdrawals`, `POST /v1/withdrawals`, `GET /v1/withdrawals/banks`,
+  `POST /v1/withdrawals/resolve-account` — wallet → bank account payout
 - `GET/POST /v1/scheduled-purchases`, `/v1/power-circle`, `/v1/meter-groups`, `/v1/referrals`
 - `GET/POST /v1/support/tickets`
 - `GET /v1/providers/status` (public, no auth)
@@ -113,7 +119,13 @@ A few things worth knowing before you flip the driver on:
 - `Disco.api_provider_code` must hold VTpass's `serviceID` for that biller
   (`ikeja-electric`, `eko-electric`, …) — `DiscoSeeder` already seeds the
   correct value for all ten DisCos it creates, verified against VTpass's own
-  per-biller docs.
+  per-biller docs. That seeder is only the initial bootstrap, though —
+  `php artisan vtpass:sync-discos` (scheduled weekly) pulls VTpass's live
+  `GET /services?identifier=electricity-bill` list and keeps `discos` in
+  sync from there: existing rows get their `name` refreshed (curated
+  `code`/`region` are left alone), new DisCos VTpass adds are created, and
+  ones it drops are marked `is_active = false` (never deleted, since
+  meters/transactions still reference them historically).
 - VTpass's guidance is to **requery, not resubmit**, a "pending" transaction.
   The provider stores VTpass's own `request_id` on `transaction.meta` the
   first time it pays, and every subsequent retry from
@@ -156,12 +168,52 @@ own per-product docs, same as `DiscoSeeder`):
 - `biller_variations` caches VTpass's `GET /service-variations` (bundle/
   bouquet/pin-type options + prices) so the mobile purchase form doesn't hit
   VTpass on every load. Refresh it with `php artisan vtpass:sync-variations`
-  (scheduled daily in `routes/console.php` once a driver is live).
+  (scheduled daily in `routes/console.php` once a driver is live) — a
+  variation VTpass stops returning for a biller is marked `is_active =
+  false` rather than left behind, the same "retire, don't delete" pattern
+  `vtpass:sync-discos` uses for discos.
 - A saved `Beneficiary` (the non-electricity equivalent of a saved `Meter`)
   supplies its `biller_id`/`identifier` by default on a purchase, still
   overridable per-request.
 - Same requery-not-resubmit and pending-past-every-retry caveats as
   electricity apply here too — see `VtpassBillerProvider`'s class docblock.
+
+## Wallets, transfers & Paystack
+
+Every wallet gets a `wallet_address` (e.g. `JLXA1B2C3D4E5`) assigned the
+moment it's created (`LedgerService::walletFor()`) — how another JolaxPay
+user sends it money, deliberately not the account's phone/email.
+
+- `POST /v1/wallet/transfer` — wallet-to-wallet, by `wallet_address`. Purely
+  internal ledger movement (`LedgerReason::TransferOut`/`::TransferIn`), no
+  external processor involved. Both wallets are locked in a fixed id order
+  (`LedgerService::transfer()`) so two simultaneous opposite-direction
+  transfers can't deadlock each other.
+- **Card payments (purchases + wallet funding) and bank withdrawals all go
+  through Paystack** (`App\Domain\Payments\PaystackGateway`,
+  https://paystack.com/docs/api/) once `PAYMENTS_DOMESTIC_DRIVER=paystack`
+  — set `PAYSTACK_SECRET_KEY`/`PAYSTACK_PUBLIC_KEY`/`PAYSTACK_CALLBACK_URL`
+  to activate; `mock` (the default) keeps everything synchronous and
+  instant for local dev, same bootstrap pattern as VTpass.
+- Unlike VTpass, Paystack's checkout is a **hosted-page redirect**, not a
+  server-to-server call our code can get a result back from directly: the
+  mobile app opens `paystack_authorization_url` (present on a transaction
+  while it's `payment_initiated` and paid by `card`, or returned directly
+  by `POST /v1/wallet/fund`) in a WebView, the customer pays on Paystack's
+  page, and a `charge.success`/`charge.failed` webhook
+  (`POST /v1/webhooks/paystack`, verified via the `x-paystack-signature`
+  HMAC-SHA512 header — `PaystackGateway::verifyWebhookSignature()`) is what
+  actually confirms it — see `PaystackWebhookController` and
+  `TransactionService::initializePaystackCheckout()`/`processPayment()`.
+- Withdrawals (`WithdrawalController`) resolve the destination account name
+  via Paystack before ever moving money, debit the wallet immediately
+  (held, same "debit now, reverse on failure" pattern as a purchase —
+  `LedgerReason::Withdrawal`/`::WithdrawalReversal`), then hand off to
+  Paystack Transfers. A transfer is *always* asynchronous — even Paystack's
+  own docs note it comes back `pending` and resolves via
+  `transfer.success`/`transfer.failed` within ~15 minutes, never
+  synchronously — so `withdrawals.status` starts `pending` and the webhook
+  is what finalizes it either way.
 
 ## Admin panel (`/admin`)
 
@@ -234,9 +286,13 @@ frontend development"), not a placeholder that got forgotten:
   default per category and remains useful for frontend work and CI — set
   `transaction.meta.simulate_failure = true` to test the retry → refund path
   without touching VTpass at all.
-- **Payments are still mocked** — `App\Domain\Payments\Providers\MockPaymentProcessor`
-  always succeeds unless `transaction.meta.simulate_payment_failure = true`.
-  No card/bank-transfer/USSD processor is integrated yet.
+- **Card payments are real via Paystack** — `PAYMENTS_DOMESTIC_DRIVER=paystack`
+  activates hosted-checkout card payments for purchases, wallet funding, and
+  bank withdrawals. See [Wallets, transfers & Paystack](#wallets-transfers--paystack)
+  above. `mock` (`MockPaymentProcessor`) is still the default and remains
+  useful for frontend work and CI — always succeeds unless
+  `transaction.meta.simulate_payment_failure = true`. International
+  (Diaspora Mode) payments are still mocked only — no live processor yet.
 - Notification channels (`SMS_DRIVER`, `WHATSAPP_DRIVER`) default to `log` —
   writes to `storage/logs/laravel.log` instead of calling a real gateway.
 
@@ -245,11 +301,14 @@ interface and a `match` arm in `VendingManager`/`PaymentManager`.
 
 ## Not yet wired up
 
-- **A payment processor** (Flutterwave/Paystack for domestic, a
-  Diaspora-Mode-capable processor for international) — still mocked, see above.
+- **An international payment processor** (Diaspora Mode) — domestic card
+  payments are real via Paystack (see above), but non-NGN currencies still
+  route through the mocked international driver.
 - **Diaspora Mode multi-currency capture** — the `transactions.fx_rate` /
-  `amount_ngn` columns and international payment routing exist; no real
-  international processor is integrated.
+  `amount_ngn` columns exist; no real international processor is integrated.
+- **A withdrawal admin/ops view** — `withdrawals` has no dedicated admin
+  page yet (unlike `transactions`/`reconciliation`); staff can currently
+  only inspect one via `php artisan tinker` or a DB client.
 - **A VTpass webhook receiver + reconciliation job** for transactions that
   stay "pending" through every bounded retry — see the note in
   [Electricity vending](#electricity-vending-vtpass) (applies to every
@@ -266,15 +325,20 @@ interface and a `match` arm in `VendingManager`/`PaymentManager`.
 php artisan test
 ```
 
-53 Pest tests covering: ledger correctness (credit/debit/insufficient-funds/
-idempotent-refund/concurrent-debit), the transaction state machine (valid
-and invalid transitions, terminal-state protection), the full mobile
-purchase pipeline end-to-end for both electricity (card and wallet payment,
-insufficient funds, auto-refund on simulated vend failure, idempotency-key
-replay, access control) and the biller-anchored services (airtime, data
-with variation_code validation, saved beneficiaries), VTpass response
-parsing for every product family against VTpass's own documented example
-responses, and admin RBAC (guest redirect, role-based page access).
+91 Pest tests covering: ledger correctness (credit/debit/insufficient-funds/
+idempotent-refund/concurrent-debit/wallet-to-wallet transfer), the
+transaction state machine (valid and invalid transitions, terminal-state
+protection), the full mobile purchase pipeline end-to-end for both
+electricity (card and wallet payment, insufficient funds, auto-refund on
+simulated vend failure, idempotency-key replay, repeat-purchase, access
+control) and the biller-anchored services (airtime, data with
+variation_code validation, saved beneficiaries), VTpass response parsing
+for every product family against VTpass's own documented example
+responses, the full Paystack round trip (checkout initialize → webhook
+confirm, for both purchases and wallet funding, success and failure) and
+withdrawals (bank resolve, debit-then-transfer, webhook-driven
+success/failure with automatic reversal), and admin RBAC (guest redirect,
+role-based page access).
 
 `phpunit.xml` sets `QUEUE_CONNECTION=sync` and `BROADCAST_CONNECTION=null`
 for the test environment, so the full async pipeline runs inline within each

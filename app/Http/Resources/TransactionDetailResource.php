@@ -40,6 +40,13 @@ class TransactionDetailResource extends JsonResource
             'beneficiary' => BeneficiaryResource::make($this->whenLoaded('beneficiary')),
             'biller_identifier' => $this->biller_identifier,
             'variation_code' => $this->variation_code,
+            // Only present while a Paystack card checkout is awaiting
+            // completion (TransactionService::initializePaystackCheckout())
+            // — the mobile app opens this in a WebView, then polls
+            // GET .../status until the transaction leaves payment_initiated.
+            'paystack_authorization_url' => $this->status->value === 'payment_initiated'
+                ? ($this->meta['paystack_authorization_url'] ?? null)
+                : null,
             'status_history' => $this->whenLoaded('statusHistory', fn () => $this->statusHistory->map(fn ($h) => [
                 'from' => $h->from_status?->value,
                 'to' => $h->to_status->value,

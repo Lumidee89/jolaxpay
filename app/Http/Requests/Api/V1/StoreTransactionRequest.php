@@ -41,7 +41,13 @@ class StoreTransactionRequest extends FormRequest
             'amount' => ['required', 'numeric', 'min:50'],
             'currency' => ['nullable', 'string', 'size:3'],
             'fx_rate' => ['nullable', 'numeric'],
-            'amount_ngn' => ['required_if:currency,!=,NGN', 'nullable', 'numeric'],
+            // Whether this is actually required depends on `currency`
+            // (see withValidator() below) — Laravel's required_if only does
+            // exact-value matching, not comparison operators, so a static
+            // `required_if:currency,!=,NGN` rule here would silently parse
+            // as "required if currency equals the literal string '!=' or
+            // 'NGN'", wrongly requiring this on every ordinary NGN purchase.
+            'amount_ngn' => ['nullable', 'numeric'],
             'payment_method' => ['required', 'in:card,bank_transfer,ussd,apple_pay,google_pay,wallet'],
             'delivery_destination' => ['nullable', new Enum(DeliveryDestination::class)],
             // Only meaningful (and required) when delivery_destination = someone_else;
@@ -50,6 +56,10 @@ class StoreTransactionRequest extends FormRequest
             'recipient_phone' => ['nullable', 'string', 'max:20'],
             'recipient_email' => ['nullable', 'email', 'max:255'],
             'meta' => ['nullable', 'array'],
+            // Only required/checked when this purchase clears
+            // config('identity.high_value_threshold') — see
+            // TransactionController::store().
+            'otp_code' => ['nullable', 'string', 'size:6'],
         ];
     }
 
@@ -59,6 +69,16 @@ class StoreTransactionRequest extends FormRequest
             if ($this->input('delivery_destination') === DeliveryDestination::SomeoneElse->value
                 && ! $this->filled('recipient_phone') && ! $this->filled('recipient_email')) {
                 $validator->errors()->add('recipient_phone', 'Provide a phone number or email for the recipient.');
+            }
+
+            // An omitted currency defaults to NGN (same as
+            // TransactionService::initiate()'s `$data['currency'] ?? 'NGN'`)
+            // — only a genuinely foreign currency needs the naira-equivalent
+            // snapshot.
+            $currency = $this->input('currency') ?: 'NGN';
+
+            if ($currency !== 'NGN' && ! $this->filled('amount_ngn')) {
+                $validator->errors()->add('amount_ngn', 'The amount ngn field is required when currency is not NGN.');
             }
 
             $serviceType = ServiceType::tryFrom($this->input('service_type', 'electricity')) ?? ServiceType::Electricity;

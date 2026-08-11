@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['user_id', 'disco_id', 'group_id', 'label', 'meter_number', 'meter_type', 'recipient_phone', 'recipient_email', 'is_favorite'])]
+#[Fillable(['user_id', 'disco_id', 'group_id', 'label', 'meter_number', 'meter_type', 'recipient_phone', 'recipient_email', 'is_favorite', 'is_saved'])]
 class Meter extends Model
 {
     use HasFactory;
@@ -17,6 +17,7 @@ class Meter extends Model
     {
         return [
             'is_favorite' => 'boolean',
+            'is_saved' => 'boolean',
         ];
     }
 

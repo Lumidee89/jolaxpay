@@ -1,12 +1,16 @@
 <?php
 
+use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\FaqArticleController;
+use App\Http\Controllers\Admin\FraudFlagController;
 use App\Http\Controllers\Admin\ProviderController;
 use App\Http\Controllers\Admin\ReconciliationController;
 use App\Http\Controllers\Admin\ReferralController;
 use App\Http\Controllers\Admin\SupportTicketController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\WalletActivityController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -31,6 +35,7 @@ Route::prefix('admin')->group(function () {
     // individual actions below layer on their own narrower permission.
     Route::middleware(['auth', 'verified', 'permission:view-dashboard'])->group(function () {
         Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('analytics', [AnalyticsController::class, 'index'])->name('admin.analytics.index');
 
         Route::get('transactions', [TransactionController::class, 'index'])->name('admin.transactions.index');
         Route::get('transactions/{transaction}', [TransactionController::class, 'show'])->name('admin.transactions.show');
@@ -50,12 +55,23 @@ Route::prefix('admin')->group(function () {
             Route::get('support/{supportTicket}', [SupportTicketController::class, 'show'])->name('admin.support.show');
             Route::post('support/{supportTicket}/reply', [SupportTicketController::class, 'reply'])->name('admin.support.reply');
             Route::patch('support/{supportTicket}/status', [SupportTicketController::class, 'updateStatus'])->name('admin.support.update-status');
+
+            Route::get('faq', [FaqArticleController::class, 'index'])->name('admin.faq.index');
+            Route::post('faq', [FaqArticleController::class, 'store'])->name('admin.faq.store');
+            Route::patch('faq/{faqArticle}', [FaqArticleController::class, 'update'])->name('admin.faq.update');
+            Route::delete('faq/{faqArticle}', [FaqArticleController::class, 'destroy'])->name('admin.faq.destroy');
         });
 
         Route::middleware('permission:manage-referrals')->group(function () {
             Route::get('referrals', [ReferralController::class, 'index'])->name('admin.referrals.index');
             Route::post('referrals/{referral}/flag', [ReferralController::class, 'flag'])->name('admin.referrals.flag');
             Route::post('referrals/{referral}/approve', [ReferralController::class, 'approve'])->name('admin.referrals.approve');
+        });
+
+        Route::middleware('permission:manage-fraud')->group(function () {
+            Route::get('fraud', [FraudFlagController::class, 'index'])->name('admin.fraud.index');
+            Route::post('fraud/{fraudFlag}/review', [FraudFlagController::class, 'review'])->name('admin.fraud.review');
+            Route::post('fraud/{fraudFlag}/dismiss', [FraudFlagController::class, 'dismiss'])->name('admin.fraud.dismiss');
         });
 
         Route::middleware('permission:manage-users')->group(function () {
@@ -68,6 +84,7 @@ Route::prefix('admin')->group(function () {
 
         Route::middleware('permission:view-reconciliation')->group(function () {
             Route::get('reconciliation', [ReconciliationController::class, 'index'])->name('admin.reconciliation.index');
+            Route::get('wallet-activity', [WalletActivityController::class, 'index'])->name('admin.wallet-activity.index');
         });
 
         Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');

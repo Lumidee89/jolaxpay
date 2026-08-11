@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AccountType;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -21,8 +22,8 @@ use Spatie\Permission\Traits\HasRoles;
  * (TRD §2.2, §7).
  */
 #[Fillable([
-    'full_name', 'phone_number', 'email', 'password', 'country_code', 'is_diaspora',
-    'is_active', 'email_verified_at', 'phone_verified_at',
+    'full_name', 'phone_number', 'email', 'avatar_path', 'password', 'country_code', 'is_diaspora',
+    'is_active', 'email_verified_at', 'phone_verified_at', 'account_type',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -38,7 +39,18 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_diaspora' => 'boolean',
             'is_active' => 'boolean',
+            'account_type' => AccountType::class,
         ];
+    }
+
+    public function businessLedgerEntries(): HasMany
+    {
+        return $this->hasMany(BusinessLedgerEntry::class);
+    }
+
+    public function isBusinessAccount(): bool
+    {
+        return $this->account_type === AccountType::Business;
     }
 
     public function wallets(): HasMany
@@ -78,6 +90,11 @@ class User extends Authenticatable
         return $this->hasMany(Transaction::class);
     }
 
+    public function withdrawals(): HasMany
+    {
+        return $this->hasMany(Withdrawal::class);
+    }
+
     public function scheduledPurchases(): HasMany
     {
         return $this->hasMany(ScheduledPurchase::class);
@@ -86,6 +103,21 @@ class User extends Authenticatable
     public function supportTickets(): HasMany
     {
         return $this->hasMany(SupportTicket::class);
+    }
+
+    public function devicePushTokens(): HasMany
+    {
+        return $this->hasMany(DevicePushToken::class);
+    }
+
+    public function notificationLogs(): HasMany
+    {
+        return $this->hasMany(NotificationLog::class);
+    }
+
+    public function notificationPreference(): HasOne
+    {
+        return $this->hasOne(NotificationPreference::class);
     }
 
     public function referralsMade(): HasMany

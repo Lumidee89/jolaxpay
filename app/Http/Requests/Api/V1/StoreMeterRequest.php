@@ -21,6 +21,7 @@ class StoreMeterRequest extends FormRequest
             'meter_type' => ['nullable', 'in:prepaid,postpaid'],
             'recipient_phone' => ['nullable', 'string', 'max:20'],
             'recipient_email' => ['nullable', 'email', 'max:255'],
+            'is_saved' => ['nullable', 'boolean'],
         ];
     }
 }

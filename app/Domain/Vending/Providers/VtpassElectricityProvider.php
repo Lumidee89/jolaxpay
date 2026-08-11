@@ -90,9 +90,20 @@ class VtpassElectricityProvider implements VendingProviderContract
         $canVend = ($content['Can_Vend'] ?? 'no') === 'yes';
 
         if (($response['code'] ?? null) !== '000' || $wrongBillersCode || ! $canVend) {
+            // Unlike a network/comm failure (logged in post()), a *rejected*
+            // verify is a normal outcome (wrong meter number, wrong DisCo,
+            // ...) — logged at info rather than error, but still logged,
+            // since otherwise the only trace of *why* VTpass said no is
+            // whatever generic message the mobile app shows.
+            Log::info('VTpass merchant-verify rejected', [
+                'billersCode' => $meter->meter_number,
+                'serviceID' => $meter->disco->api_provider_code,
+                'response' => $response,
+            ]);
+
             return new MeterVerificationResult(
                 valid: false,
-                message: $response['response_description'] ?? 'This meter number could not be verified. Double-check it and try again.',
+                message: $response['response_description'] ?? $content['error'] ?? 'This meter number could not be verified. Double-check it and try again.',
                 raw: $response,
             );
         }
@@ -123,12 +134,58 @@ class VtpassElectricityProvider implements VendingProviderContract
         }
     }
 
+    /**
+     * VTpass's live electricity billers list (GET /services?identifier=
+     * electricity-bill) — the authoritative source `DiscoSeeder`'s
+     * hardcoded list only bootstraps. See
+     * App\Console\Commands\SyncDiscosFromVtpass, which upserts `discos`
+     * from this so new/renamed/retired DisCos don't need a code change.
+     *
+     * @return array<int, array{service_id: string, name: string}>
+     */
+    public function fetchElectricityServices(): array
+    {
+        try {
+            $response = Http::baseUrl($this->baseUrl())
+                ->withHeaders($this->getHeaders())
+                ->timeout($this->timeout())
+                ->get('/services', ['identifier' => 'electricity-bill']);
+
+            $services = $response->json('content');
+        } catch (Throwable $e) {
+            Log::error('VTpass /services request failed', ['error' => $e->getMessage()]);
+
+            return [];
+        }
+
+        if (! is_array($services)) {
+            Log::error('VTpass /services returned an unexpected (non-JSON-array) response');
+
+            return [];
+        }
+
+        return collect($services)
+            ->filter(fn ($service) => isset($service['serviceID'], $service['name']))
+            ->map(fn (array $service) => [
+                'service_id' => $service['serviceID'],
+                'name' => $service['name'],
+            ])
+            ->values()
+            ->all();
+    }
+
     protected function requery(string $requestId): ?array
     {
         return $this->post('/requery', ['request_id' => $requestId]);
     }
 
-    /** @return array<string, mixed>|null null on a network/communication failure. */
+    /**
+     * @return array<string, mixed>|null null on a network/communication
+     * failure, or when VTpass responds with something other than a JSON
+     * object — e.g. a bare quoted string like `"Invalid Credentials."` on
+     * a 401, which isn't an `array` and would otherwise crash this
+     * method's own `?array` return type instead of being logged plainly.
+     */
     protected function post(string $path, array $body): ?array
     {
         try {
@@ -137,7 +194,18 @@ class VtpassElectricityProvider implements VendingProviderContract
                 ->timeout($this->timeout())
                 ->post($path, $body);
 
-            return $response->json();
+            $decoded = $response->json();
+
+            if (! is_array($decoded)) {
+                Log::error("VTpass {$path} returned an unexpected (non-JSON-object) response", [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return null;
+            }
+
+            return $decoded;
         } catch (Throwable $e) {
             Log::error("VTpass {$path} request failed", ['error' => $e->getMessage(), 'body' => $body]);
 
@@ -184,6 +252,12 @@ class VtpassElectricityProvider implements VendingProviderContract
             // emergency, not a customer-facing "meter problem". Logged at
             // critical so it's impossible to miss in ops monitoring.
             Log::critical('VTpass wallet balance is low — electricity vending will keep failing until topped up.', ['response' => $data]);
+        } elseif ($code !== '000') {
+            // Any other rejection (e.g. code 028 "PRODUCT IS NOT
+            // WHITELISTED ON YOUR ACCOUNT", an account-configuration
+            // problem, not a customer/meter one) — logged so the *why*
+            // isn't only discoverable by manually requerying VTpass by hand.
+            Log::warning("VTpass vend rejected (code {$code})", ['request_id' => $requestId, 'response' => $data]);
         }
 
         return new VendResult(
