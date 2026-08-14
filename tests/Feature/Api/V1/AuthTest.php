@@ -106,6 +106,41 @@ it('rejects login with the wrong password', function () {
     ])->assertUnprocessable();
 });
 
+it('resets a password using an SMS OTP sent to the registered phone number', function () {
+    $user = User::factory()->create(['password' => 'OldPassword123']);
+
+    $this->postJson('/api/v1/auth/password/forgot', [
+        'phone_number' => $user->phone_number,
+    ])->assertOk();
+
+    $otp = Otp::where('identifier', $user->phone_number)
+        ->where('purpose', 'password_reset')
+        ->latest('id')
+        ->firstOrFail();
+
+    // The OTP model stores only a hash; issue a known code for the reset assertion.
+    $otp->update(['code_hash' => \Illuminate\Support\Facades\Hash::make('123456')]);
+
+    $this->postJson('/api/v1/auth/password/reset', [
+        'phone_number' => $user->phone_number,
+        'code' => '123456',
+        'password' => 'NewPassword123',
+        'password_confirmation' => 'NewPassword123',
+    ])->assertOk();
+
+    expect(\Illuminate\Support\Facades\Hash::check('NewPassword123', $user->fresh()->password))->toBeTrue();
+});
+
+it('requires a new-device OTP for business accounts too', function () {
+    $user = User::factory()->create(['password' => 'Password123', 'account_type' => 'business']);
+
+    $this->postJson('/api/v1/auth/login', [
+        'email' => $user->email,
+        'password' => 'Password123',
+        'device_name' => 'new-business-device',
+    ])->assertOk()->assertJson(['requires_otp' => true, 'purpose' => 'new_device_login']);
+});
+
 it('revokes the current token on logout', function () {
     $user = User::factory()->create();
     $token = $user->createToken('iPhone-15');

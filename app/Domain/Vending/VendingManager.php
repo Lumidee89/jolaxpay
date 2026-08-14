@@ -6,6 +6,7 @@ use App\Domain\Vending\Contracts\BillerVendingProviderContract;
 use App\Domain\Vending\Contracts\VendingProviderContract;
 use App\Domain\Vending\Providers\MockBillerProvider;
 use App\Domain\Vending\Providers\MockElectricityProvider;
+use App\Domain\Vending\Providers\SafeHavenElectricityProvider;
 use App\Domain\Vending\Providers\VtpassBillerProvider;
 use App\Domain\Vending\Providers\VtpassElectricityProvider;
 use App\Enums\ServiceType;
@@ -39,6 +40,7 @@ class VendingManager
         return match (config('vending.electricity.driver')) {
             'mock' => app(MockElectricityProvider::class),
             'vtpass' => app(VtpassElectricityProvider::class),
+            'safehaven' => app(SafeHavenElectricityProvider::class),
             $driver => throw new InvalidArgumentException("Unknown electricity vending driver [{$driver}]."),
         };
     }

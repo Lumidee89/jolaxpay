@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Identity\OtpService;
 use App\Domain\Insights\TransactionSearchParser;
-use App\Domain\Payments\PaystackChargeReconciler;
+use App\Domain\Payments\SafeHavenGateway;
 use App\Domain\Transactions\TransactionService;
 use App\Enums\DeliveryChannel;
 use App\Enums\OtpPurpose;
@@ -29,7 +29,7 @@ class TransactionController extends Controller
 {
     public function __construct(
         private readonly TransactionService $transactions,
-        private readonly PaystackChargeReconciler $reconciler,
+        private readonly SafeHavenGateway $safeHaven,
         private readonly OtpService $otp,
         private readonly TransactionSearchParser $searchParser,
     ) {}
@@ -168,9 +168,13 @@ class TransactionController extends Controller
     {
         $this->authorizeAccess($request, $transaction);
 
-        if ($transaction->status === TransactionStatus::PaymentInitiated && ($transaction->meta['paystack_reference'] ?? null)) {
-            $this->reconciler->reconcile($transaction->meta['paystack_reference']);
-            $transaction->refresh();
+        if ($transaction->status === TransactionStatus::PaymentInitiated && ($transaction->meta['safehaven_reference'] ?? null)) {
+            $payment = $this->safeHaven->verifyCheckout($transaction->meta['safehaven_reference']);
+            $status = strtolower((string) ($payment['status'] ?? ''));
+            if (in_array($status, ['completed', 'successful', 'success'], true)) {
+                $this->transactions->processPayment($transaction);
+                $transaction->refresh();
+            }
         }
 
         return response()->json(['data' => TransactionDetailResource::make($transaction)]);

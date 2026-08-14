@@ -5,7 +5,7 @@ namespace App\Domain\Transactions;
 use App\Domain\Fraud\FraudCheckService;
 use App\Domain\Notifications\NotificationDispatcher;
 use App\Domain\Payments\PaymentManager;
-use App\Domain\Payments\PaystackGateway;
+use App\Domain\Payments\SafeHavenGateway;
 use App\Domain\Vending\VendingManager;
 use App\Domain\Wallet\Exceptions\InsufficientFundsException;
 use App\Domain\Wallet\LedgerService;
@@ -40,7 +40,7 @@ class TransactionService
         private readonly VendingManager $vendingManager,
         private readonly LedgerService $ledger,
         private readonly NotificationDispatcher $notifier,
-        private readonly PaystackGateway $paystack,
+        private readonly SafeHavenGateway $safeHaven,
         private readonly FraudCheckService $fraud,
     ) {}
 
@@ -129,8 +129,8 @@ class TransactionService
         // ProcessTransactionPayment. Everything else (wallet, or 'card'
         // while PAYMENTS_DOMESTIC_DRIVER is still 'mock') keeps working
         // exactly as before: dispatch immediately.
-        if ($this->requiresPaystackRedirect($transaction)) {
-            $this->initializePaystackCheckout($transaction, $user);
+        if ($this->requiresSafeHavenCheckout($transaction)) {
+            $this->initializeSafeHavenCheckout($transaction, $user);
         } else {
             ProcessTransactionPayment::dispatch($transaction);
         }
@@ -138,11 +138,11 @@ class TransactionService
         return $transaction->fresh();
     }
 
-    protected function requiresPaystackRedirect(Transaction $transaction): bool
+    protected function requiresSafeHavenCheckout(Transaction $transaction): bool
     {
         return $transaction->payment_method !== 'wallet'
             && $transaction->currency === config('payments.domestic_currency', 'NGN')
-            && config('payments.domestic.driver') === 'paystack';
+            && config('payments.domestic.driver') === 'safehaven';
     }
 
     /**
@@ -152,26 +152,14 @@ class TransactionService
      * even be reached to start the checkout, fails fast rather than
      * leaving the buyer stuck on a transaction with no way to pay it.
      */
-    protected function initializePaystackCheckout(Transaction $transaction, User $user): void
+    protected function initializeSafeHavenCheckout(Transaction $transaction, User $user): void
     {
         $reference = 'txn-'.$transaction->reference;
-        $amountKobo = (int) round(((float) $transaction->total()) * 100);
-
-        $init = $this->paystack->initializeTransaction($user->email, $amountKobo, $reference, [
-            'transaction_id' => $transaction->id,
-            'purpose' => 'transaction',
-        ]);
-
-        if (! $init) {
-            $this->fail($transaction, 'Could not start card payment — please try again.');
-
-            return;
-        }
-
         $transaction->update(['meta' => [
             ...($transaction->meta ?? []),
-            'paystack_reference' => $reference,
-            'paystack_authorization_url' => $init['authorization_url'],
+            'safehaven_reference' => $reference,
+            'safehaven_checkout' => [...$this->safeHaven->checkoutConfig(), 'amount' => (float) $transaction->total(),
+                'customer' => ['firstName' => str($user->full_name)->before(' ')->value(), 'lastName' => str($user->full_name)->after(' ')->value(), 'emailAddress' => $user->email, 'phoneNumber' => $user->phone_number]],
         ]]);
     }
 
@@ -197,10 +185,10 @@ class TransactionService
 
                 return;
             }
-        } elseif ($transaction->meta['paystack_reference'] ?? null) {
+        } elseif ($transaction->meta['safehaven_reference'] ?? null) {
             // Paystack already confirmed this via webhook before this job
             // ran — nothing left to charge, just record the reference.
-            $transaction->update(['payment_reference' => $transaction->meta['paystack_reference']]);
+            $transaction->update(['payment_reference' => $transaction->meta['safehaven_reference']]);
         } else {
             $result = $this->paymentManager->driverFor($transaction)->charge($transaction);
 

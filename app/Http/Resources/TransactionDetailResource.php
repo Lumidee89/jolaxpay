@@ -44,8 +44,8 @@ class TransactionDetailResource extends JsonResource
             // completion (TransactionService::initializePaystackCheckout())
             // — the mobile app opens this in a WebView, then polls
             // GET .../status until the transaction leaves payment_initiated.
-            'paystack_authorization_url' => $this->status->value === 'payment_initiated'
-                ? ($this->meta['paystack_authorization_url'] ?? null)
+            'safehaven_checkout' => $this->status->value === 'payment_initiated'
+                ? (isset($this->meta['safehaven_checkout']) ? [...$this->meta['safehaven_checkout'], 'reference' => $this->meta['safehaven_reference']] : null)
                 : null,
             'status_history' => $this->whenLoaded('statusHistory', fn () => $this->statusHistory->map(fn ($h) => [
                 'from' => $h->from_status?->value,

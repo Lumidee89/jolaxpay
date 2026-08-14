@@ -11,11 +11,11 @@ use App\Http\Controllers\Api\V1\MeterController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\MeterGroupController;
 use App\Http\Controllers\Api\V1\NotificationPreferenceController;
-use App\Http\Controllers\Api\V1\PaystackWebhookController;
 use App\Http\Controllers\Api\V1\PowerCircleController;
 use App\Http\Controllers\Api\V1\ProviderStatusController;
 use App\Http\Controllers\Api\V1\ReferralController;
 use App\Http\Controllers\Api\V1\ScheduledPurchaseController;
+use App\Http\Controllers\Api\V1\SafeHavenWebhookController;
 use App\Http\Controllers\Api\V1\SessionController;
 use App\Http\Controllers\Api\V1\SupportTicketController;
 use App\Http\Controllers\Api\V1\TransactionController;
@@ -38,14 +38,13 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/register', [AuthController::class, 'register']);
     Route::post('auth/login', [AuthController::class, 'login']);
     Route::post('auth/otp/verify', [AuthController::class, 'verifyOtp']);
+    Route::post('auth/password/forgot', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
+    Route::post('auth/password/reset', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1');
     Route::get('providers/status', [ProviderStatusController::class, 'index']);
     Route::get('faq', [FaqController::class, 'index']);
 
-    // Paystack calls this directly (not the mobile app) to confirm card
-    // purchases, wallet top-ups, and bank withdrawals — see
-    // PaystackWebhookController's class docblock for why all three are
-    // "initiate now, confirmed later" and land here.
-    Route::post('webhooks/paystack', [PaystackWebhookController::class, 'handle']);
+    // Safe Haven notifies this endpoint about virtual-account and checkout payments.
+    Route::post('webhooks/safehaven', [SafeHavenWebhookController::class, 'handle']);
 
     // --- Authenticated (Sanctum) ---
     Route::middleware('auth:sanctum')->group(function () {

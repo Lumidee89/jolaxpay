@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Notifications\NotificationDispatcher;
 use App\Domain\Payments\PaymentManager;
-use App\Domain\Payments\PaystackChargeReconciler;
-use App\Domain\Payments\PaystackGateway;
+use App\Domain\Payments\SafeHavenFundingService;
+use App\Domain\Payments\SafeHavenGateway;
 use App\Domain\Wallet\Exceptions\InsufficientFundsException;
 use App\Domain\Wallet\Exceptions\InvalidTransferException;
 use App\Domain\Wallet\LedgerService;
@@ -31,8 +31,8 @@ class WalletController extends Controller
     public function __construct(
         private readonly LedgerService $ledger,
         private readonly PaymentManager $paymentManager,
-        private readonly PaystackGateway $paystack,
-        private readonly PaystackChargeReconciler $reconciler,
+        private readonly SafeHavenGateway $safeHaven,
+        private readonly SafeHavenFundingService $safeHavenFunding,
         private readonly NotificationDispatcher $notifier,
     ) {}
 
@@ -61,19 +61,9 @@ class WalletController extends Controller
         $data = $request->validated();
         $wallet = $this->ledger->walletFor($request->user(), $data['currency'] ?? 'NGN');
 
-        if (config('payments.domestic.driver') === 'paystack' && $wallet->currency === config('payments.domestic_currency', 'NGN')) {
+        if (config('payments.domestic.driver') === 'safehaven' && $wallet->currency === config('payments.domestic_currency', 'NGN')) {
             $reference = 'fund-'.Str::uuid();
-            $amountKobo = (int) round(((float) $data['amount']) * 100);
-
-            $init = $this->paystack->initializeTransaction($request->user()->email, $amountKobo, $reference, [
-                'purpose' => 'wallet_funding',
-                'user_id' => $request->user()->id,
-            ]);
-
-            if (! $init) {
-                return response()->json(['message' => 'Could not start card payment — please try again.'], 422);
-            }
-
+            $method = $data['payment_method'] === 'card' ? 'checkout' : 'virtual_account';
             $intent = WalletFundingIntent::create([
                 'user_id' => $request->user()->id,
                 'wallet_id' => $wallet->id,
@@ -81,13 +71,35 @@ class WalletController extends Controller
                 'amount' => $data['amount'],
                 'currency' => $wallet->currency,
                 'status' => 'pending',
+                'meta' => ['method' => $method],
             ]);
-
-            return response()->json([
-                'requires_redirect' => true,
-                'authorization_url' => $init['authorization_url'],
-                'reference' => $intent->reference,
-            ], 202);
+            if ($method === 'checkout') {
+                return response()->json([
+                    'funding_method' => 'checkout',
+                    'reference' => $reference,
+                    'checkout' => [
+                        ...$this->safeHaven->checkoutConfig(),
+                        'amount' => (float) $data['amount'],
+                        'customer' => [
+                            'firstName' => str($request->user()->full_name)->before(' ')->value(),
+                            'lastName' => str($request->user()->full_name)->after(' ')->value(),
+                            'emailAddress' => $request->user()->email,
+                            'phoneNumber' => $request->user()->phone_number,
+                        ],
+                    ],
+                ], 202);
+            }
+            $account = $this->safeHaven->createVirtualAccount((float) $data['amount'], $reference);
+            if (! $account) { $intent->delete(); return response()->json(['message' => 'Could not create a funding account — please try again.'], 422); }
+            $accountData = $account['account'] ?? $account;
+            $intent->update(['meta' => [...$intent->meta, 'virtual_account_id' => $account['_id'] ?? $accountData['_id'] ?? null]]);
+            return response()->json(['funding_method' => 'virtual_account', 'reference' => $reference, 'virtual_account' => [
+                'id' => $account['_id'] ?? $accountData['_id'] ?? null,
+                'account_number' => $accountData['accountNumber'] ?? $accountData['number'] ?? null,
+                'account_name' => $accountData['accountName'] ?? $accountData['name'] ?? 'JolaxPay',
+                'bank_name' => $accountData['bankName'] ?? 'Safe Haven MFB',
+                'amount' => (float) $data['amount'], 'expires_at' => now()->addSeconds(config('payments.safehaven.virtual_account_ttl', 900))->toIso8601String(),
+            ]], 202);
         }
 
         // A funding "transaction" isn't a Payment Flow purchase, so it's
@@ -137,8 +149,13 @@ class WalletController extends Controller
             ->where('user_id', $request->user()->id)
             ->firstOrFail();
 
-        if ($intent->status === 'pending') {
-            $this->reconciler->reconcile($reference);
+        if ($intent->status === 'pending' && ($intent->meta['virtual_account_id'] ?? null)) {
+            $transaction = $this->safeHaven->virtualAccountTransaction($intent->meta['virtual_account_id']);
+            if ($transaction) $this->safeHavenFunding->confirm($reference, $transaction);
+            $intent->refresh();
+        } elseif ($intent->status === 'pending' && ($intent->meta['method'] ?? null) === 'checkout') {
+            $transaction = $this->safeHaven->verifyCheckout($reference);
+            if ($transaction) $this->safeHavenFunding->confirm($reference, $transaction);
             $intent->refresh();
         }
 

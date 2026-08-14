@@ -43,6 +43,9 @@
     <div class="row"><span>Date</span><span>{{ $entry->created_at?->format('d M Y, H:i') }}</span></div>
     <div class="row"><span>Type</span><span>{{ $reasonLabels[$reasonValue] ?? ucfirst(str_replace('_', ' ', $reasonValue)) }}</span></div>
     <div class="row"><span>Wallet</span><span>{{ $wallet->wallet_address }}</span></div>
+    @if(!empty($entry->meta['note']))
+        <div class="row"><span>Description</span><span>{{ $entry->meta['note'] }}</span></div>
+    @endif
     @if($entry->transaction)
         <div class="row"><span>Related transaction</span><span>{{ $entry->transaction->reference }}</span></div>
     @endif
@@ -50,7 +53,7 @@
     <table>
         <tr><th>Description</th><th style="text-align:right">Amount</th></tr>
         <tr>
-            <td>{{ $reasonLabels[$reasonValue] ?? ucfirst(str_replace('_', ' ', $reasonValue)) }}</td>
+            <td>{{ $entry->meta['note'] ?? ($reasonLabels[$reasonValue] ?? ucfirst(str_replace('_', ' ', $reasonValue))) }}</td>
             <td style="text-align:right" class="{{ $isCredit ? 'amount-credit' : 'amount-debit' }}">
                 {{ $isCredit ? '+' : '-' }}{{ $entry->currency }} {{ number_format((float) $entry->amount, 2) }}
             </td>

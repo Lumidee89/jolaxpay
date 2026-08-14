@@ -7,10 +7,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** A wallet -> bank account payout via Paystack Transfers — see the migration's docblock. */
+/** A wallet -> bank account payout through the configured banking provider. */
 #[Fillable([
     'user_id', 'wallet_id', 'amount', 'currency', 'bank_code', 'bank_name',
-    'account_number', 'account_name', 'paystack_recipient_code', 'paystack_transfer_code',
+    'account_number', 'account_name', 'provider_transfer_id',
     'reference', 'status', 'failure_reason',
 ])]
 class Withdrawal extends Model

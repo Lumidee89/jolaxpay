@@ -9,7 +9,9 @@ use App\Enums\DeliveryChannel;
 use App\Enums\OtpPurpose;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\LoginRequest;
+use App\Http\Requests\Api\V1\ForgotPasswordRequest;
 use App\Http\Requests\Api\V1\RegisterRequest;
+use App\Http\Requests\Api\V1\ResetPasswordRequest;
 use App\Http\Requests\Api\V1\UpdateProfileRequest;
 use App\Http\Requests\Api\V1\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
@@ -142,6 +144,29 @@ class AuthController extends Controller
             'user' => UserResource::make($user),
             'token' => $token,
         ]);
+    }
+
+    public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
+    {
+        $user = User::where('phone_number', $request->validated('phone_number'))->firstOrFail();
+        $this->otp->issue($user->phone_number, OtpPurpose::PasswordReset, DeliveryChannel::Sms, $user);
+
+        return response()->json(['message' => 'A password reset code has been sent to your registered phone number.']);
+    }
+
+    public function resetPassword(ResetPasswordRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+
+        if (! $this->otp->verify($data['phone_number'], OtpPurpose::PasswordReset, $data['code'])) {
+            throw ValidationException::withMessages(['code' => 'That code is invalid or has expired.']);
+        }
+
+        $user = User::where('phone_number', $data['phone_number'])->firstOrFail();
+        $user->forceFill(['password' => $data['password']])->save();
+        $user->tokens()->delete();
+
+        return response()->json(['message' => 'Your password has been reset. You can now sign in.']);
     }
 
     public function logout(Request $request): JsonResponse
