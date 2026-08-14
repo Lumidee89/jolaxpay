@@ -119,7 +119,19 @@ class SafeHavenGateway
             ]);
             $data = $response->json();
             $token = $data['access_token'] ?? $data['data']['access_token'] ?? null;
-            if (! $response->successful() || ! $token) throw new RuntimeException('Safe Haven did not return an access token.');
+            if (! $response->successful() || ! $token) {
+                $safeResponse = is_array($data) ? $data : ['body' => $response->body()];
+                unset($safeResponse['access_token'], $safeResponse['refresh_token']);
+                if (isset($safeResponse['data']) && is_array($safeResponse['data'])) {
+                    unset($safeResponse['data']['access_token'], $safeResponse['data']['refresh_token']);
+                }
+                Log::error('Safe Haven OAuth token exchange rejected', [
+                    'status' => $response->status(),
+                    'base_url' => config('payments.safehaven.base_url'),
+                    'response' => $safeResponse,
+                ]);
+                throw new RuntimeException('Safe Haven did not return an access token.');
+            }
             $ibsClientId = $data['ibs_client_id'] ?? $data['data']['ibs_client_id'] ?? null;
             return array_filter(['access_token' => $token, 'ibs_client_id' => $ibsClientId]);
         });
@@ -128,7 +140,10 @@ class SafeHavenGateway
     protected function clientAssertion(): string
     {
         $encode = fn (array $value) => rtrim(strtr(base64_encode(json_encode($value, JSON_THROW_ON_ERROR)), '+/', '-_'), '=');
-        $now = time();
+        // Backdate slightly to tolerate ordinary clock drift between hosts.
+        // Large differences must be fixed on the host; otherwise Safe Haven
+        // correctly treats the assertion as not yet valid.
+        $now = time() - 30;
         $unsigned = $encode(['alg' => 'RS256', 'typ' => 'JWT']).'.'.$encode([
             'iss' => config('payments.safehaven.company_url'), 'sub' => config('payments.safehaven.oauth_client_id'),
             'aud' => config('payments.safehaven.base_url'), 'iat' => $now, 'exp' => $now + 300,
