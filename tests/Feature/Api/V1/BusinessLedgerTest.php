@@ -22,26 +22,26 @@ it('registers as a business account when chosen', function () {
         'email' => 'shop@example.com',
         'password' => 'Password1',
         'password_confirmation' => 'Password1',
-        'account_type' => 'business',
+        'account_type' => 'agent',
         'device_name' => 'test-device',
-    ])->assertCreated()->assertJsonPath('user.account_type', 'business');
+    ])->assertCreated()->assertJsonPath('user.account_type', 'agent');
 });
 
 it('blocks an individual account from the business ledger', function () {
     $user = User::factory()->create(['account_type' => 'individual']);
     Sanctum::actingAs($user);
 
-    $this->getJson('/api/v1/business/entries')->assertForbidden();
-    $this->postJson('/api/v1/business/entries', [
+    $this->getJson('/api/v1/agent/entries')->assertForbidden();
+    $this->postJson('/api/v1/agent/entries', [
         'type' => 'income', 'category' => 'Sales', 'amount' => '5000', 'entry_date' => now()->toDateString(),
     ])->assertForbidden();
 });
 
 it('lets a business account record, list, and delete ledger entries', function () {
-    $user = User::factory()->create(['account_type' => 'business']);
+    $user = User::factory()->create(['account_type' => 'agent']);
     Sanctum::actingAs($user);
 
-    $response = $this->postJson('/api/v1/business/entries', [
+    $response = $this->postJson('/api/v1/agent/entries', [
         'type' => 'income',
         'category' => 'Sales',
         'amount' => '15000',
@@ -51,33 +51,33 @@ it('lets a business account record, list, and delete ledger entries', function (
     $response->assertCreated();
     $entryId = $response->json('data.id');
 
-    $this->getJson('/api/v1/business/entries')->assertOk()->assertJsonCount(1, 'data');
+    $this->getJson('/api/v1/agent/entries')->assertOk()->assertJsonCount(1, 'data');
 
-    $this->deleteJson("/api/v1/business/entries/{$entryId}")->assertOk();
-    $this->getJson('/api/v1/business/entries')->assertOk()->assertJsonCount(0, 'data');
+    $this->deleteJson("/api/v1/agent/entries/{$entryId}")->assertOk();
+    $this->getJson('/api/v1/agent/entries')->assertOk()->assertJsonCount(0, 'data');
 });
 
 it('blocks a business account from deleting another user\'s ledger entry', function () {
-    $owner = User::factory()->create(['account_type' => 'business']);
+    $owner = User::factory()->create(['account_type' => 'agent']);
     $entry = BusinessLedgerEntry::create([
         'user_id' => $owner->id, 'type' => 'expense', 'category' => 'Rent', 'amount' => '20000', 'entry_date' => now(),
     ]);
 
-    $other = User::factory()->create(['account_type' => 'business']);
+    $other = User::factory()->create(['account_type' => 'agent']);
     Sanctum::actingAs($other);
 
-    $this->deleteJson("/api/v1/business/entries/{$entry->id}")->assertForbidden();
+    $this->deleteJson("/api/v1/agent/entries/{$entry->id}")->assertForbidden();
 });
 
 it('summarizes income, expense, and net for the current month', function () {
-    $user = User::factory()->create(['account_type' => 'business']);
+    $user = User::factory()->create(['account_type' => 'agent']);
     Sanctum::actingAs($user);
 
     BusinessLedgerEntry::create(['user_id' => $user->id, 'type' => 'income', 'category' => 'Sales', 'amount' => '50000', 'entry_date' => now()]);
     BusinessLedgerEntry::create(['user_id' => $user->id, 'type' => 'expense', 'category' => 'Rent', 'amount' => '20000', 'entry_date' => now()]);
     BusinessLedgerEntry::create(['user_id' => $user->id, 'type' => 'income', 'category' => 'Sales', 'amount' => '99999', 'entry_date' => now()->subMonths(2)]);
 
-    $response = $this->getJson('/api/v1/business/summary');
+    $response = $this->getJson('/api/v1/agent/summary');
 
     $response->assertOk()
         ->assertJsonPath('data.this_month.income', 50000)

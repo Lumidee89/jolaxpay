@@ -46,7 +46,7 @@ enum NotificationCategory: string
             'payment_confirmation', 'token_delivery' => self::Transactions,
             'wallet_funded', 'wallet_transfer_sent', 'wallet_transfer_received',
             'withdrawal_completed', 'withdrawal_failed' => self::Wallet,
-            'referral_reward' => self::Referrals,
+            'referral_reward', 'agent_referral_commission', 'agent_reward' => self::Referrals,
             'login_success' => self::Security,
             default => null,
         };

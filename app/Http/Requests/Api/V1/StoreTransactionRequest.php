@@ -6,6 +6,7 @@ use App\Enums\DeliveryDestination;
 use App\Enums\ServiceType;
 use App\Models\Beneficiary;
 use App\Models\Biller;
+use App\Models\BillerVariation;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Enum;
 
@@ -131,6 +132,18 @@ class StoreTransactionRequest extends FormRequest
 
         if ($biller->requires_variation && ! $this->filled('variation_code')) {
             $validator->errors()->add('variation_code', 'This biller requires a variation_code (bundle/plan selection).');
+        } elseif ($biller->requires_variation) {
+            $variation = BillerVariation::query()
+                ->where('biller_id', $biller->id)
+                ->where('variation_code', $this->input('variation_code'))
+                ->where('is_active', true)
+                ->first();
+
+            if (! $variation) {
+                $validator->errors()->add('variation_code', 'The selected plan is unavailable. Refresh the available plans and try again.');
+            } elseif ($variation->fixed_price && bccomp((string) $this->input('amount'), (string) $variation->amount, 2) !== 0) {
+                $validator->errors()->add('amount', 'The amount does not match the selected plan price.');
+            }
         }
     }
 }

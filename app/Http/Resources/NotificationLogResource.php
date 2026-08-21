@@ -2,10 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Models\NotificationLog;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin \App\Models\NotificationLog */
+/** @mixin NotificationLog */
 class NotificationLogResource extends JsonResource
 {
     public function toArray(Request $request): array
@@ -33,6 +34,8 @@ class NotificationLogResource extends JsonResource
             'withdrawal_completed' => 'Withdrawal successful',
             'withdrawal_failed' => 'Withdrawal failed',
             'referral_reward' => 'You earned a referral reward! 🎉',
+            'agent_referral_commission' => 'Referral commission earned',
+            'agent_reward' => $this->payload['title'] ?? 'Agent reward',
             default => 'JolaxPay update',
         };
     }
@@ -49,6 +52,8 @@ class NotificationLogResource extends JsonResource
             'withdrawal_completed' => '₦'.number_format((float) ($this->payload['amount'] ?? 0), 2).' has been sent to your '.($this->payload['bank_name'] ?? 'bank').' account ending '.substr((string) ($this->payload['account_number'] ?? ''), -4).'.',
             'withdrawal_failed' => 'Your withdrawal of ₦'.number_format((float) ($this->payload['amount'] ?? 0), 2).' could not be completed and has been returned to your wallet.',
             'referral_reward' => ($this->payload['referred_name'] ?? 'Someone you referred').' made their first purchase — ₦'.number_format((float) ($this->payload['amount'] ?? 0), 2).' has been added to your wallet.',
+            'agent_referral_commission' => 'You earned ₦'.number_format((float) ($this->payload['amount'] ?? 0), 2).' from an eligible referred-user transaction.',
+            'agent_reward' => $this->payload['body'] ?? 'You received a referral performance reward.',
             default => $this->payload['body'] ?? 'You have a new account update.',
         };
     }

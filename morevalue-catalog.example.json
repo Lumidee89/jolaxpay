@@ -1,0 +1,15 @@
+{
+    "billers": {
+        "MTN_DATA": [
+            {"id": "420", "name": "Example MTN plan", "amount": "500.00"}
+        ],
+        "GLO_DATA": [],
+        "9MOBILE_DATA": [],
+        "AIRTEL_DATA": [],
+        "GOTV": [
+            {"id": "25", "name": "Example GOtv bouquet", "amount": "5000.00"}
+        ],
+        "DSTV": [],
+        "STARTIMES": []
+    }
+}

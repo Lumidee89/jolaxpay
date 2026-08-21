@@ -6,6 +6,7 @@ use App\Domain\Fraud\FraudCheckService;
 use App\Domain\Notifications\NotificationDispatcher;
 use App\Domain\Payments\PaymentManager;
 use App\Domain\Payments\SafeHavenGateway;
+use App\Domain\Referrals\CommissionService;
 use App\Domain\Vending\VendingManager;
 use App\Domain\Wallet\Exceptions\InsufficientFundsException;
 use App\Domain\Wallet\LedgerService;
@@ -42,6 +43,7 @@ class TransactionService
         private readonly NotificationDispatcher $notifier,
         private readonly SafeHavenGateway $safeHaven,
         private readonly FraudCheckService $fraud,
+        private readonly CommissionService $commissions,
     ) {}
 
     /**
@@ -377,6 +379,9 @@ class TransactionService
     public function manualRefund(Transaction $transaction, User $admin): void
     {
         $entry = $this->ledger->refundToWallet($transaction);
+        if ($entry) {
+            $this->commissions->reverseFor($transaction, 'Underlying transaction refunded by admin.');
+        }
 
         TransactionStatusHistory::create([
             'transaction_id' => $transaction->id,

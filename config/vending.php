@@ -23,6 +23,27 @@ return [
     'cable_tv' => ['driver' => env('VENDING_CABLE_TV_DRIVER', 'mock')],
     'education' => ['driver' => env('VENDING_EDUCATION_DRIVER', 'mock')],
 
+    // MoreValue Digital: https://morevaluedigital.com.ng/api-docs.html
+    // Live data/cable plan IDs are confidential and are stored as each
+    // BillerVariation::variation_code rather than fetched from an API.
+    'morevalue' => [
+        'base_url' => env('MOREVALUE_BASE_URL', 'https://morevaluedigital.com.ng/api'),
+        'api_token' => env('MOREVALUE_API_TOKEN'),
+        'timeout' => (int) env('MOREVALUE_TIMEOUT', 30),
+        'electricity_providers' => [
+            'IKEDC' => env('MOREVALUE_IKEDC_PROVIDER_ID', '1'),
+            'EKEDC' => env('MOREVALUE_EKEDC_PROVIDER_ID', '2'),
+            'AEDC' => env('MOREVALUE_AEDC_PROVIDER_ID'),
+            'PHED' => env('MOREVALUE_PHED_PROVIDER_ID'),
+            'KEDCO' => env('MOREVALUE_KEDCO_PROVIDER_ID'),
+            'EEDC' => env('MOREVALUE_EEDC_PROVIDER_ID'),
+            'IBEDC' => env('MOREVALUE_IBEDC_PROVIDER_ID', '6'),
+            'BEDC' => env('MOREVALUE_BEDC_PROVIDER_ID'),
+            'JED' => env('MOREVALUE_JED_PROVIDER_ID'),
+            'KAEDCO' => env('MOREVALUE_KAEDCO_PROVIDER_ID'),
+        ],
+    ],
+
     // VTpass (https://vtpass.com/documentation/) — the live electricity
     // vending driver. 'sandbox' and 'live' are fully separate accounts with
     // separate keys; VTPASS_ENV picks which base URL + key set is active.

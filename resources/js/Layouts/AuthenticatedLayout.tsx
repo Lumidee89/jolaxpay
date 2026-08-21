@@ -14,7 +14,7 @@ const NAV_ITEMS: Array<{ label: string; route: string; permission?: string }> = 
     { label: 'Providers', route: 'admin.providers.index', permission: 'manage-providers' },
     { label: 'Support', route: 'admin.support.index', permission: 'manage-support' },
     { label: 'FAQ', route: 'admin.faq.index', permission: 'manage-support' },
-    { label: 'Referrals', route: 'admin.referrals.index', permission: 'manage-referrals' },
+    { label: 'Agent Referrals', route: 'admin.referrals.index', permission: 'manage-referrals' },
     { label: 'Fraud', route: 'admin.fraud.index', permission: 'manage-fraud' },
     { label: 'Users', route: 'admin.users.index', permission: 'manage-users' },
     { label: 'Reconciliation', route: 'admin.reconciliation.index', permission: 'view-reconciliation' },

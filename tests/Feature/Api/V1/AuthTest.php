@@ -2,6 +2,7 @@
 
 use App\Models\Otp;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 
 it('registers a new user with no BVN/NIN and returns a token', function () {
@@ -119,7 +120,7 @@ it('resets a password using an SMS OTP sent to the registered phone number', fun
         ->firstOrFail();
 
     // The OTP model stores only a hash; issue a known code for the reset assertion.
-    $otp->update(['code_hash' => \Illuminate\Support\Facades\Hash::make('123456')]);
+    $otp->update(['code_hash' => Hash::make('123456')]);
 
     $this->postJson('/api/v1/auth/password/reset', [
         'phone_number' => $user->phone_number,
@@ -128,11 +129,11 @@ it('resets a password using an SMS OTP sent to the registered phone number', fun
         'password_confirmation' => 'NewPassword123',
     ])->assertOk();
 
-    expect(\Illuminate\Support\Facades\Hash::check('NewPassword123', $user->fresh()->password))->toBeTrue();
+    expect(Hash::check('NewPassword123', $user->fresh()->password))->toBeTrue();
 });
 
 it('requires a new-device OTP for business accounts too', function () {
-    $user = User::factory()->create(['password' => 'Password123', 'account_type' => 'business']);
+    $user = User::factory()->create(['password' => 'Password123', 'account_type' => 'agent']);
 
     $this->postJson('/api/v1/auth/login', [
         'email' => $user->email,

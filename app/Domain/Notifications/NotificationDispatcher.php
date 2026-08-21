@@ -185,6 +185,8 @@ class NotificationDispatcher
                 'You earned a referral reward! 🎉',
                 ($payload['referred_name'] ?? 'Someone you referred').' made their first purchase — ₦'.number_format((float) ($payload['amount'] ?? 0), 2).' has been added to your wallet.',
             ],
+            'agent_referral_commission' => ['Referral commission earned', 'You earned ₦'.number_format((float) ($payload['amount'] ?? 0), 2).' from an eligible referred-user transaction.'],
+            'agent_reward' => [$payload['title'] ?? 'Agent reward', $payload['body'] ?? 'You received a referral performance reward.'],
             default => ['JolaxPay update', $payload['body'] ?? 'You have a new account update.'],
         };
     }

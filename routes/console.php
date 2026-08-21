@@ -13,10 +13,6 @@ Artisan::command('inspire', function () {
 // `schedule:run` every minute) to actually fire.
 Schedule::command('purchases:evaluate-scheduled')->everyFiveMinutes()->withoutOverlapping();
 
-// VTpass's data/cable_tv/education bundle catalog and pricing change from
-// time to time — keep the cached `biller_variations` table fresh.
-Schedule::command('vtpass:sync-variations')->daily()->withoutOverlapping();
-
-// The DisCo catalog itself changes rarely (a new distributor, a rename) —
-// weekly is plenty. See SyncDiscosFromVtpass for what this does and doesn't touch.
-Schedule::command('vtpass:sync-discos')->weekly()->withoutOverlapping();
+// MoreValue keeps its live plan/provider IDs behind the vendor dashboard,
+// so no public catalog can be safely synchronized. Operations maintains
+// those IDs in biller_variations and the MOREVALUE_*_PROVIDER_ID settings.

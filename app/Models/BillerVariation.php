@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** Cached VTpass service-variation (data bundle / TV bouquet / exam pin type) — see SyncBillerVariations. */
+/** Provider plan ID and customer-facing price for a data/cable/education option. */
 #[Fillable(['biller_id', 'variation_code', 'name', 'amount', 'fixed_price', 'is_active'])]
 class BillerVariation extends Model
 {

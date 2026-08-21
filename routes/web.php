@@ -66,6 +66,13 @@ Route::prefix('admin')->group(function () {
             Route::get('referrals', [ReferralController::class, 'index'])->name('admin.referrals.index');
             Route::post('referrals/{referral}/flag', [ReferralController::class, 'flag'])->name('admin.referrals.flag');
             Route::post('referrals/{referral}/approve', [ReferralController::class, 'approve'])->name('admin.referrals.approve');
+            Route::post('referrals/{referral}/reassign', [ReferralController::class, 'reassign'])->name('admin.referrals.reassign');
+            Route::post('referral-rules', [ReferralController::class, 'storeRule'])->name('admin.referrals.rules.store');
+            Route::patch('referral-rules/{commissionRule}', [ReferralController::class, 'updateRule'])->name('admin.referrals.rules.update');
+            Route::patch('referral-settings', [ReferralController::class, 'updateSettings'])->name('admin.referrals.settings.update');
+            Route::post('referral-campaigns', [ReferralController::class, 'storeCampaign'])->name('admin.referrals.campaigns.store');
+            Route::post('referral-rewards', [ReferralController::class, 'reward'])->name('admin.referrals.rewards.store');
+            Route::get('referrals-export', [ReferralController::class, 'export'])->name('admin.referrals.export');
         });
 
         Route::middleware('permission:manage-fraud')->group(function () {

@@ -2,9 +2,9 @@
 
 namespace App\Enums;
 
-/** PRD §13 — chosen at registration; gates the Business Dashboard surface. */
+/** Chosen at registration; gates the Agent tools and referral centre. */
 enum AccountType: string
 {
     case Individual = 'individual';
-    case Business = 'business';
+    case Agent = 'agent';
 }

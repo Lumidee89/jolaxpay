@@ -7,11 +7,9 @@ use Illuminate\Database\Seeder;
 
 /**
  * Airtime/data/cable_tv/education billers (PRD §7.1 Phase 2) — the
- * counterpart to DiscoSeeder. `api_provider_code` holds VTpass's
- * `serviceID`, and `requires_billers_code`/`requires_variation`/
- * `supports_verify` drive VtpassBillerProvider's request shape — all
- * verified against VTpass's own per-product docs
- * (https://vtpass.com/documentation/), not guessed.
+ * counterpart to DiscoSeeder. `api_provider_code` holds MoreValue's
+ * network/provider ID. Plan IDs remain in biller_variations because the
+ * provider only exposes them in an authenticated vendor dashboard.
  */
 class BillerSeeder extends Seeder
 {
@@ -19,22 +17,21 @@ class BillerSeeder extends Seeder
     {
         $billers = [
             // Airtime: just a phone number and an amount — no billersCode, no variation.
-            ['name' => 'MTN Airtime', 'code' => 'MTN_AIRTIME', 'service_type' => 'airtime', 'vtpass' => 'mtn', 'label' => 'Phone number'],
-            ['name' => 'Glo Airtime', 'code' => 'GLO_AIRTIME', 'service_type' => 'airtime', 'vtpass' => 'glo', 'label' => 'Phone number'],
-            ['name' => 'Airtel Airtime', 'code' => 'AIRTEL_AIRTIME', 'service_type' => 'airtime', 'vtpass' => 'airtel', 'label' => 'Phone number'],
-            ['name' => '9mobile Airtime', 'code' => '9MOBILE_AIRTIME', 'service_type' => 'airtime', 'vtpass' => 'etisalat', 'label' => 'Phone number'],
+            ['name' => 'MTN Airtime', 'code' => 'MTN_AIRTIME', 'service_type' => 'airtime', 'morevalue' => '1', 'label' => 'Phone number'],
+            ['name' => 'Glo Airtime', 'code' => 'GLO_AIRTIME', 'service_type' => 'airtime', 'morevalue' => '2', 'label' => 'Phone number'],
+            ['name' => '9mobile Airtime', 'code' => '9MOBILE_AIRTIME', 'service_type' => 'airtime', 'morevalue' => '3', 'label' => 'Phone number'],
+            ['name' => 'Airtel Airtime', 'code' => 'AIRTEL_AIRTIME', 'service_type' => 'airtime', 'morevalue' => '4', 'label' => 'Phone number'],
 
             // Data: billersCode is the phone number receiving the bundle; variation_code picks the bundle.
-            ['name' => 'MTN Data', 'code' => 'MTN_DATA', 'service_type' => 'data', 'vtpass' => 'mtn-data', 'label' => 'Phone number', 'billers_code' => true, 'variation' => true],
-            ['name' => 'Glo Data', 'code' => 'GLO_DATA', 'service_type' => 'data', 'vtpass' => 'glo-data', 'label' => 'Phone number', 'billers_code' => true, 'variation' => true],
-            ['name' => 'Airtel Data', 'code' => 'AIRTEL_DATA', 'service_type' => 'data', 'vtpass' => 'airtel-data', 'label' => 'Phone number', 'billers_code' => true, 'variation' => true],
-            ['name' => '9mobile Data', 'code' => '9MOBILE_DATA', 'service_type' => 'data', 'vtpass' => 'etisalat-data', 'label' => 'Phone number', 'billers_code' => true, 'variation' => true],
+            ['name' => 'MTN Data', 'code' => 'MTN_DATA', 'service_type' => 'data', 'morevalue' => '1', 'label' => 'Phone number', 'billers_code' => true, 'variation' => true],
+            ['name' => 'Glo Data', 'code' => 'GLO_DATA', 'service_type' => 'data', 'morevalue' => '2', 'label' => 'Phone number', 'billers_code' => true, 'variation' => true],
+            ['name' => '9mobile Data', 'code' => '9MOBILE_DATA', 'service_type' => 'data', 'morevalue' => '3', 'label' => 'Phone number', 'billers_code' => true, 'variation' => true],
+            ['name' => 'Airtel Data', 'code' => 'AIRTEL_DATA', 'service_type' => 'data', 'morevalue' => '4', 'label' => 'Phone number', 'billers_code' => true, 'variation' => true],
 
             // Cable TV: billersCode is the smartcard/IUC number; DSTV/GOtv/Startimes support merchant-verify, Showmax doesn't.
-            ['name' => 'DStv', 'code' => 'DSTV', 'service_type' => 'cable_tv', 'vtpass' => 'dstv', 'label' => 'Smartcard number', 'billers_code' => true, 'variation' => true, 'verify' => true],
-            ['name' => 'GOtv', 'code' => 'GOTV', 'service_type' => 'cable_tv', 'vtpass' => 'gotv', 'label' => 'Smartcard number', 'billers_code' => true, 'variation' => true, 'verify' => true],
-            ['name' => 'StarTimes', 'code' => 'STARTIMES', 'service_type' => 'cable_tv', 'vtpass' => 'startimes', 'label' => 'Smartcard number', 'billers_code' => true, 'variation' => true, 'verify' => true],
-            ['name' => 'Showmax', 'code' => 'SHOWMAX', 'service_type' => 'cable_tv', 'vtpass' => 'showmax', 'label' => 'Phone number', 'billers_code' => true, 'variation' => true],
+            ['name' => 'GOtv', 'code' => 'GOTV', 'service_type' => 'cable_tv', 'morevalue' => '1', 'label' => 'IUC number', 'billers_code' => true, 'variation' => true, 'verify' => true],
+            ['name' => 'DStv', 'code' => 'DSTV', 'service_type' => 'cable_tv', 'morevalue' => '2', 'label' => 'Smartcard number', 'billers_code' => true, 'variation' => true, 'verify' => true],
+            ['name' => 'StarTimes', 'code' => 'STARTIMES', 'service_type' => 'cable_tv', 'morevalue' => '3', 'label' => 'Smartcard number', 'billers_code' => true, 'variation' => true, 'verify' => true],
 
             // Education: WAEC Registration and WAEC Result Checker both need only a
             // variation_code (registration type / pin type) and a phone number — no
@@ -50,7 +47,7 @@ class BillerSeeder extends Seeder
                 [
                     'name' => $biller['name'],
                     'service_type' => $biller['service_type'],
-                    'api_provider_code' => $biller['vtpass'],
+                    'api_provider_code' => $biller['morevalue'] ?? $biller['vtpass'],
                     'identifier_label' => $biller['label'],
                     'requires_billers_code' => $biller['billers_code'] ?? false,
                     'requires_variation' => $biller['variation'] ?? false,
@@ -61,5 +58,9 @@ class BillerSeeder extends Seeder
                 ]
             );
         }
+
+        // MoreValue's public API does not support Showmax. Existing rows
+        // are retained for history but hidden from new purchases.
+        Biller::where('code', 'SHOWMAX')->update(['is_active' => false]);
     }
 }

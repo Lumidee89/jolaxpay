@@ -2,7 +2,7 @@
 
 namespace App\Listeners;
 
-use App\Domain\Referrals\ReferralService;
+use App\Domain\Referrals\CommissionService;
 use App\Domain\Transactions\Events\TransactionStatusUpdated;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
@@ -16,10 +16,10 @@ use Illuminate\Contracts\Queue\ShouldQueue;
  */
 class RewardReferralOnFirstTransaction implements ShouldQueue
 {
-    public function __construct(private readonly ReferralService $referrals) {}
+    public function __construct(private readonly CommissionService $commissions) {}
 
     public function handle(TransactionStatusUpdated $event): void
     {
-        $this->referrals->rewardForFirstTransaction($event->transaction);
+        $this->commissions->accrue($event->transaction);
     }
 }

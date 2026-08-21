@@ -23,7 +23,7 @@ use Spatie\Permission\Traits\HasRoles;
  */
 #[Fillable([
     'full_name', 'phone_number', 'email', 'avatar_path', 'password', 'country_code', 'is_diaspora',
-    'is_active', 'email_verified_at', 'phone_verified_at', 'account_type',
+    'is_active', 'email_verified_at', 'phone_verified_at', 'account_type', 'referral_code', 'agent_approved_at',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -40,6 +40,7 @@ class User extends Authenticatable
             'is_diaspora' => 'boolean',
             'is_active' => 'boolean',
             'account_type' => AccountType::class,
+            'agent_approved_at' => 'datetime',
         ];
     }
 
@@ -48,9 +49,15 @@ class User extends Authenticatable
         return $this->hasMany(BusinessLedgerEntry::class);
     }
 
+    public function isAgentAccount(): bool
+    {
+        return $this->account_type === AccountType::Agent;
+    }
+
+    /** Backward-compatible internal alias while /business routes are retired. */
     public function isBusinessAccount(): bool
     {
-        return $this->account_type === AccountType::Business;
+        return $this->isAgentAccount();
     }
 
     public function wallets(): HasMany
@@ -123,6 +130,16 @@ class User extends Authenticatable
     public function referralsMade(): HasMany
     {
         return $this->hasMany(Referral::class, 'referrer_id');
+    }
+
+    public function referralAttribution(): HasOne
+    {
+        return $this->hasOne(Referral::class, 'referred_user_id');
+    }
+
+    public function agentCommissions(): HasMany
+    {
+        return $this->hasMany(AgentCommission::class, 'agent_id');
     }
 
     /** Is this user staff (any admin-panel role), as opposed to a customer? */

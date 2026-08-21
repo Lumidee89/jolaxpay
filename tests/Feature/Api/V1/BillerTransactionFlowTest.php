@@ -2,6 +2,7 @@
 
 use App\Models\Beneficiary;
 use App\Models\Biller;
+use App\Models\BillerVariation;
 use App\Models\Transaction;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
@@ -54,6 +55,12 @@ it('rejects a data purchase with no variation_code', function () {
 
 it('takes a data purchase all the way to delivered once biller_identifier and variation_code are provided', function () {
     $biller = Biller::factory()->data()->create(['service_type' => 'data', 'api_provider_code' => 'mtn-data']);
+    BillerVariation::factory()->for($biller)->create([
+        'variation_code' => 'mtn-10mb-100',
+        'amount' => '1000.00',
+        'fixed_price' => true,
+        'is_active' => true,
+    ]);
 
     $response = $this->withHeader('Idempotency-Key', 'data-key-2')
         ->postJson('/api/v1/transactions', [
@@ -91,7 +98,7 @@ it('purchases against a saved beneficiary without repeating the biller_identifie
         ->and($transaction->biller_identifier)->toBe('08022222222');
 });
 
-it("rejects a beneficiary that belongs to someone else", function () {
+it('rejects a beneficiary that belongs to someone else', function () {
     $biller = Biller::factory()->create(['service_type' => 'airtime']);
     $otherUser = User::factory()->create();
     $beneficiary = Beneficiary::factory()->for($otherUser)->for($biller)->create();

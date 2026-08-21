@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\AgentReferralController;
 use App\Http\Controllers\Api\V1\BeneficiaryController;
 use App\Http\Controllers\Api\V1\BusinessLedgerController;
 use App\Http\Controllers\Api\V1\DevicePushTokenController;
@@ -62,10 +63,13 @@ Route::prefix('v1')->group(function () {
         Route::get('sessions', [SessionController::class, 'index']);
         Route::delete('sessions/{tokenId}', [SessionController::class, 'destroy']);
 
-        Route::get('business/entries', [BusinessLedgerController::class, 'index']);
-        Route::post('business/entries', [BusinessLedgerController::class, 'store']);
-        Route::delete('business/entries/{businessLedgerEntry}', [BusinessLedgerController::class, 'destroy']);
-        Route::get('business/summary', [BusinessLedgerController::class, 'summary']);
+        Route::get('agent/entries', [BusinessLedgerController::class, 'index']);
+        Route::post('agent/entries', [BusinessLedgerController::class, 'store']);
+        Route::delete('agent/entries/{businessLedgerEntry}', [BusinessLedgerController::class, 'destroy']);
+        Route::get('agent/summary', [BusinessLedgerController::class, 'summary']);
+        Route::get('agent/referrals/dashboard', [AgentReferralController::class, 'dashboard']);
+        Route::get('agent/referrals/customers', [AgentReferralController::class, 'customers']);
+        Route::get('agent/referrals/commissions', [AgentReferralController::class, 'commissions']);
 
         Route::get('insights', [InsightController::class, 'index']);
         Route::get('insights/summary', [InsightController::class, 'summary']);

@@ -2,27 +2,34 @@
 
 namespace App\Domain\Referrals;
 
-use App\Domain\Notifications\NotificationDispatcher;
-use App\Domain\Wallet\LedgerService;
-use App\Enums\DeliveryChannel;
-use App\Enums\LedgerReason;
-use App\Enums\TransactionStatus;
 use App\Models\Referral;
-use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
- * Power Circle Rewards (PRD §16): links a referral code to a new signup,
- * then credits the referrer once — and only once — that referred user
- * completes their first real transaction.
+ * One-level, immutable Agent → Personal user referral attribution.
  */
 class ReferralService
 {
-    public function __construct(
-        private readonly LedgerService $ledger,
-        private readonly NotificationDispatcher $notifier,
-    ) {}
+    public function ensureAgentCode(User $agent): string
+    {
+        if (! $agent->isAgentAccount()) {
+            throw new \RuntimeException('Only Agent accounts receive Agent referral codes.');
+        }
+
+        if ($agent->referral_code) {
+            return $agent->referral_code;
+        }
+
+        do {
+            $code = 'JLX-'.Str::upper(Str::substr(Str::slug($agent->full_name), 0, 4)).'-'.Str::upper(Str::random(6));
+        } while (User::where('referral_code', $code)->exists());
+
+        $agent->forceFill(['referral_code' => $code, 'agent_approved_at' => $agent->agent_approved_at ?? now()])->save();
+
+        return $code;
+    }
 
     /**
      * Called from AuthController::register(). Silently ignores an
@@ -36,10 +43,14 @@ class ReferralService
             return;
         }
 
-        $referral = Referral::where('code', $code)->whereNull('referred_user_id')->first();
+        if ($newUser->isAgentAccount() || Referral::where('referred_user_id', $newUser->id)->exists()) {
+            return;
+        }
 
-        if (! $referral || $referral->referrer_id === $newUser->id) {
-            Log::info('Referral code not redeemed (unknown, already used, or self-referral).', [
+        $agent = User::where('referral_code', trim($code))->first();
+
+        if (! $agent || ! $agent->isAgentAccount() || ! $agent->agent_approved_at || $agent->id === $newUser->id) {
+            Log::info('Agent referral code not redeemed.', [
                 'code' => $code,
                 'new_user_id' => $newUser->id,
             ]);
@@ -47,59 +58,12 @@ class ReferralService
             return;
         }
 
-        $referral->update([
+        Referral::create([
+            'referrer_id' => $agent->id,
             'referred_user_id' => $newUser->id,
+            'code' => $agent->referral_code,
             'status' => 'qualified',
-        ]);
-    }
-
-    /**
-     * Called from RewardReferralOnFirstTransaction on every Delivered/
-     * OutcomeConfirmed transition. No-ops unless: the buyer was referred,
-     * that referral hasn't been rewarded yet, and this is genuinely their
-     * first successful transaction (guards against a retried/duplicate
-     * event crediting twice).
-     */
-    public function rewardForFirstTransaction(Transaction $transaction): void
-    {
-        if (! in_array($transaction->status, [TransactionStatus::Delivered, TransactionStatus::OutcomeConfirmed], true)) {
-            return;
-        }
-
-        $referral = Referral::where('referred_user_id', $transaction->user_id)
-            ->where('status', 'qualified')
-            ->first();
-
-        if (! $referral) {
-            return;
-        }
-
-        $hasEarlierSuccess = Transaction::where('user_id', $transaction->user_id)
-            ->whereIn('status', [TransactionStatus::Delivered, TransactionStatus::OutcomeConfirmed])
-            ->where('id', '!=', $transaction->id)
-            ->exists();
-
-        if ($hasEarlierSuccess) {
-            return;
-        }
-
-        $amount = (string) config('referrals.reward_amount', 500);
-        $wallet = $this->ledger->walletFor($referral->referrer, config('referrals.reward_currency', 'NGN'));
-
-        $this->ledger->credit($wallet, $amount, LedgerReason::ReferralReward, $transaction, [
-            'referred_user_id' => $transaction->user_id,
-        ]);
-
-        $referral->update([
-            'status' => 'rewarded',
-            'reward_type' => 'wallet_credit',
-            'reward_value' => $amount,
-        ]);
-
-        $this->notifier->send($referral->referrer, 'referral_reward', DeliveryChannel::InApp, [
-            'amount' => $amount,
-            'currency' => config('referrals.reward_currency', 'NGN'),
-            'referred_name' => $transaction->user->full_name,
+            'attributed_at' => now(),
         ]);
     }
 }

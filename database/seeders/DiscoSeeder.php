@@ -7,10 +7,9 @@ use Illuminate\Database\Seeder;
 
 /**
  * Nigeria's electricity distribution companies (PRD §7.1, TRD §4).
- * `api_provider_code` holds VTpass's `serviceID` for that biller
- * (https://vtpass.com/documentation/) — verified against VTpass's own
- * per-biller docs, not guessed, since VtpassElectricityProvider sends this
- * value verbatim as `serviceID` on every merchant-verify/pay/requery call.
+ * `api_provider_code` holds MoreValue Digital's provider ID. Only IDs
+ * published in its documentation have defaults; remaining IDs must be
+ * copied from the authenticated vendor dashboard into MOREVALUE_* settings.
  */
 class DiscoSeeder extends Seeder
 {
@@ -30,16 +29,17 @@ class DiscoSeeder extends Seeder
         ];
 
         foreach ($discos as $disco) {
+            $providerId = config('vending.morevalue.electricity_providers.'.$disco['code']);
             Disco::updateOrCreate(
                 ['code' => $disco['code']],
                 [
                     'name' => $disco['name'],
                     'region' => $disco['region'],
                     'service_type' => 'electricity',
-                    'api_provider_code' => $disco['vtpass'],
+                    'api_provider_code' => $providerId ?: null,
                     'health_status' => 'healthy',
                     'health_checked_at' => now(),
-                    'is_active' => true,
+                    'is_active' => filled($providerId),
                 ]
             );
         }

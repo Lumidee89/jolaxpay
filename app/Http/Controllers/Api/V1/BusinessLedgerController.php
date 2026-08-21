@@ -12,7 +12,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * PRD §13 Business Dashboard — a manual income/expense ledger, gated to
- * users.account_type = 'business' (chosen at registration). Deliberately
+ * users.account_type = 'agent' (chosen at registration). Deliberately
  * separate from the wallet/Payment Flow domains: this is a business
  * account's own bookkeeping, not money actually moving through JolaxPay.
  */
@@ -54,7 +54,7 @@ class BusinessLedgerController extends Controller
         return response()->json(['data' => ['deleted' => true]]);
     }
 
-    /** Monthly income/expense/net summary — GET /business/summary. */
+    /** Monthly income/expense/net summary — GET /agent/summary. */
     public function summary(Request $request): JsonResponse
     {
         $this->authorizeBusinessAccount($request);
@@ -95,6 +95,6 @@ class BusinessLedgerController extends Controller
 
     protected function authorizeBusinessAccount(Request $request): void
     {
-        abort_unless($request->user()->isBusinessAccount(), 403, 'This is only available for business accounts.');
+        abort_unless($request->user()->isAgentAccount(), 403, 'This is only available for Agent accounts.');
     }
 }

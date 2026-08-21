@@ -52,6 +52,9 @@ class AuthController extends Controller
         ]);
 
         $this->ledger->walletFor($user);
+        if ($user->isAgentAccount()) {
+            $this->referrals->ensureAgentCode($user);
+        }
         $this->referrals->redeem($user, $data['referral_code'] ?? null);
 
         $token = $user->createToken($data['device_name'])->plainTextToken;
