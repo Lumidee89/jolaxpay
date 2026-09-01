@@ -2,10 +2,14 @@
 
 use App\Models\Otp;
 use App\Models\User;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\URL;
 
-it('registers a new user with no BVN/NIN and returns a token', function () {
+it('registers a new user without issuing a token and sends email verification', function () {
+    Notification::fake();
     $response = $this->postJson('/api/v1/auth/register', [
         'full_name' => 'Adaeze Okafor',
         'phone_number' => '+2348011111111',
@@ -17,9 +21,56 @@ it('registers a new user with no BVN/NIN and returns a token', function () {
 
     $response->assertCreated()
         ->assertJsonPath('user.full_name', 'Adaeze Okafor')
-        ->assertJsonStructure(['user', 'token']);
+        ->assertJsonPath('requires_email_verification', true)
+        ->assertJsonMissing(['token']);
 
-    expect(User::where('email', 'adaeze@example.com')->exists())->toBeTrue();
+    $user = User::where('email', 'adaeze@example.com')->firstOrFail();
+    expect($user->email_verified_at)->toBeNull()
+        ->and($user->tokens()->count())->toBe(0);
+    Notification::assertSentTo($user, VerifyEmail::class);
+});
+
+it('blocks login until the registered email is verified', function () {
+    $user = User::factory()->unverified()->create(['password' => 'Password123']);
+
+    $this->postJson('/api/v1/auth/login', [
+        'email' => $user->email,
+        'password' => 'Password123',
+        'device_name' => 'iPhone-15',
+    ])->assertForbidden()
+        ->assertJsonPath('requires_email_verification', true)
+        ->assertJsonMissing(['token']);
+});
+
+it('verifies an email through a temporary signed mobile link', function () {
+    $user = User::factory()->unverified()->create();
+    $url = URL::temporarySignedRoute('api.verification.verify', now()->addHour(), [
+        'id' => $user->id,
+        'hash' => sha1($user->email),
+    ]);
+
+    $this->get($url)->assertRedirect('jolaxpay://email-verified?verified=1');
+
+    expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
+});
+
+it('resends verification without revealing whether the account exists', function () {
+    Notification::fake();
+    $user = User::factory()->unverified()->create();
+
+    $this->postJson('/api/v1/auth/email/verification-notification', ['email' => $user->email])->assertOk();
+    $this->postJson('/api/v1/auth/email/verification-notification', ['email' => 'missing@example.com'])->assertOk();
+
+    Notification::assertSentTo($user, VerifyEmail::class);
+});
+
+it('rejects protected API access for an existing unverified token', function () {
+    $user = User::factory()->unverified()->create();
+    $token = $user->createToken('old-device')->plainTextToken;
+
+    $this->withToken($token)->getJson('/api/v1/auth/me')
+        ->assertForbidden()
+        ->assertJsonPath('requires_email_verification', true);
 });
 
 it('rejects registration with a duplicate phone number', function () {

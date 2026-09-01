@@ -8,15 +8,17 @@ use App\Domain\Wallet\LedgerService;
 use App\Enums\DeliveryChannel;
 use App\Enums\OtpPurpose;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\V1\LoginRequest;
 use App\Http\Requests\Api\V1\ForgotPasswordRequest;
+use App\Http\Requests\Api\V1\LoginRequest;
 use App\Http\Requests\Api\V1\RegisterRequest;
 use App\Http\Requests\Api\V1\ResetPasswordRequest;
 use App\Http\Requests\Api\V1\UpdateProfileRequest;
 use App\Http\Requests\Api\V1\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -57,11 +59,12 @@ class AuthController extends Controller
         }
         $this->referrals->redeem($user, $data['referral_code'] ?? null);
 
-        $token = $user->createToken($data['device_name'])->plainTextToken;
+        $user->sendEmailVerificationNotification();
 
         return response()->json([
             'user' => UserResource::make($user),
-            'token' => $token,
+            'requires_email_verification' => true,
+            'message' => 'Account created. Check your email and verify your address before signing in.',
         ], 201);
     }
 
@@ -84,6 +87,14 @@ class AuthController extends Controller
 
         if (! $user->is_active) {
             throw ValidationException::withMessages(['email' => 'This account has been deactivated. Contact support.']);
+        }
+
+        if (! $user->hasVerifiedEmail()) {
+            return response()->json([
+                'requires_email_verification' => true,
+                'email' => $user->email,
+                'message' => 'Verify your email address before signing in.',
+            ], 403);
         }
 
         $isKnownDevice = $user->tokens()->where('name', $data['device_name'])->exists();
@@ -140,6 +151,13 @@ class AuthController extends Controller
         }
 
         $user = User::where('phone_number', $data['identifier'])->orWhere('email', $data['identifier'])->firstOrFail();
+        if (! $user->hasVerifiedEmail()) {
+            return response()->json([
+                'requires_email_verification' => true,
+                'email' => $user->email,
+                'message' => 'Verify your email address before signing in.',
+            ], 403);
+        }
         $deviceName = $request->string('device_name', 'unknown-device');
         $token = $user->createToken((string) $deviceName)->plainTextToken;
 
@@ -195,7 +213,8 @@ class AuthController extends Controller
         $user = $request->user();
         $user->fill($request->validated());
 
-        if ($user->isDirty('email')) {
+        $emailChanged = $user->isDirty('email');
+        if ($emailChanged) {
             $user->email_verified_at = null;
         }
         if ($user->isDirty('phone_number')) {
@@ -204,7 +223,39 @@ class AuthController extends Controller
 
         $user->save();
 
+        if ($emailChanged) {
+            $user->sendEmailVerificationNotification();
+        }
+
         return response()->json(['user' => UserResource::make($user)]);
+    }
+
+    public function resendEmailVerification(Request $request): JsonResponse
+    {
+        $data = $request->validate(['email' => ['required', 'email']]);
+        $user = User::where('email', $data['email'])->first();
+
+        // Deliberately generic so this endpoint cannot be used to discover
+        // which email addresses have JolaxPay accounts.
+        if ($user && ! $user->hasVerifiedEmail()) {
+            $user->sendEmailVerificationNotification();
+        }
+
+        return response()->json(['message' => 'If that address has an unverified account, a new verification email has been sent.']);
+    }
+
+    public function verifyEmail(Request $request, int $id, string $hash): RedirectResponse
+    {
+        $user = User::findOrFail($id);
+        abort_unless(hash_equals($hash, sha1($user->getEmailForVerification())), 403, 'Invalid verification link.');
+
+        if (! $user->hasVerifiedEmail() && $user->markEmailAsVerified()) {
+            event(new Verified($user));
+        }
+
+        $url = (string) config('app.mobile_email_verified_url', 'jolaxpay://email-verified');
+
+        return redirect()->away($url.(str_contains($url, '?') ? '&' : '?').'verified=1');
     }
 
     /** Store a small profile image for the authenticated mobile user. */

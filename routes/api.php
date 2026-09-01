@@ -1,22 +1,22 @@
 <?php
 
-use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AgentReferralController;
+use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BeneficiaryController;
+use App\Http\Controllers\Api\V1\BillerController;
 use App\Http\Controllers\Api\V1\BusinessLedgerController;
 use App\Http\Controllers\Api\V1\DevicePushTokenController;
-use App\Http\Controllers\Api\V1\BillerController;
 use App\Http\Controllers\Api\V1\FaqController;
 use App\Http\Controllers\Api\V1\InsightController;
 use App\Http\Controllers\Api\V1\MeterController;
-use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\MeterGroupController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\NotificationPreferenceController;
 use App\Http\Controllers\Api\V1\PowerCircleController;
 use App\Http\Controllers\Api\V1\ProviderStatusController;
 use App\Http\Controllers\Api\V1\ReferralController;
-use App\Http\Controllers\Api\V1\ScheduledPurchaseController;
 use App\Http\Controllers\Api\V1\SafeHavenWebhookController;
+use App\Http\Controllers\Api\V1\ScheduledPurchaseController;
 use App\Http\Controllers\Api\V1\SessionController;
 use App\Http\Controllers\Api\V1\SupportTicketController;
 use App\Http\Controllers\Api\V1\TransactionController;
@@ -38,6 +38,9 @@ Route::prefix('v1')->group(function () {
     // --- Public ---
     Route::post('auth/register', [AuthController::class, 'register']);
     Route::post('auth/login', [AuthController::class, 'login']);
+    Route::post('auth/email/verification-notification', [AuthController::class, 'resendEmailVerification'])->middleware('throttle:3,1');
+    Route::get('auth/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
+        ->middleware(['signed', 'throttle:6,1'])->name('api.verification.verify');
     Route::post('auth/otp/verify', [AuthController::class, 'verifyOtp']);
     Route::post('auth/password/forgot', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
     Route::post('auth/password/reset', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1');
@@ -48,7 +51,7 @@ Route::prefix('v1')->group(function () {
     Route::post('webhooks/safehaven', [SafeHavenWebhookController::class, 'handle']);
 
     // --- Authenticated (Sanctum) ---
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'email.verified'])->group(function () {
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::patch('auth/profile', [AuthController::class, 'updateProfile']);

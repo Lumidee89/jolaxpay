@@ -54,6 +54,8 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'mobile_email_verified_url' => env('MOBILE_EMAIL_VERIFIED_URL', 'jolaxpay://email-verified'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
