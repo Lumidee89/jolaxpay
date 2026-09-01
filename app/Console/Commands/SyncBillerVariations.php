@@ -27,7 +27,7 @@ class SyncBillerVariations extends Command
 {
     protected $signature = 'vtpass:sync-variations {--biller= : Only sync one biller, by its `code`}';
 
-    protected $description = 'Sync data/cable_tv/education bundle options and prices from VTpass.';
+    protected $description = 'Sync data/cable_tv/education options and prices from each service type\'s active vending driver.';
 
     public function handle(VendingManager $vending): int
     {

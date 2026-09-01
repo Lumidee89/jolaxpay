@@ -39,6 +39,11 @@ class BillerSeeder extends Seeder
             ['name' => 'WAEC Registration', 'code' => 'WAEC_REG', 'service_type' => 'education', 'vtpass' => 'waec-registration', 'label' => null, 'variation' => true],
             ['name' => 'WAEC Result Checker', 'code' => 'WAEC', 'service_type' => 'education', 'vtpass' => 'waec', 'label' => null, 'variation' => true],
             ['name' => 'JAMB Pin Vending', 'code' => 'JAMB', 'service_type' => 'education', 'vtpass' => 'jamb', 'label' => 'JAMB Profile ID', 'billers_code' => true, 'variation' => true, 'verify' => true],
+            // Schedwave also exposes these exam PIN products. They remain
+            // harmless when another driver is selected because provider
+            // mapping happens inside that driver's catalog sync/vend path.
+            ['name' => 'NECO Result Checker', 'code' => 'NECO', 'service_type' => 'education', 'vtpass' => 'neco', 'label' => null, 'variation' => true],
+            ['name' => 'NABTEB Result Checker', 'code' => 'NABTEB', 'service_type' => 'education', 'vtpass' => 'nabteb', 'label' => null, 'variation' => true],
         ];
 
         foreach ($billers as $biller) {

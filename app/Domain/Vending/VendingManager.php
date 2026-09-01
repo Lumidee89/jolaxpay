@@ -9,6 +9,8 @@ use App\Domain\Vending\Providers\MockElectricityProvider;
 use App\Domain\Vending\Providers\MoreValueBillerProvider;
 use App\Domain\Vending\Providers\MoreValueElectricityProvider;
 use App\Domain\Vending\Providers\SafeHavenElectricityProvider;
+use App\Domain\Vending\Providers\SchedwaveBillerProvider;
+use App\Domain\Vending\Providers\SchedwaveElectricityProvider;
 use App\Domain\Vending\Providers\VtpassBillerProvider;
 use App\Domain\Vending\Providers\VtpassElectricityProvider;
 use App\Enums\ServiceType;
@@ -44,6 +46,7 @@ class VendingManager
             'morevalue' => app(MoreValueElectricityProvider::class),
             'vtpass' => app(VtpassElectricityProvider::class),
             'safehaven' => app(SafeHavenElectricityProvider::class),
+            'schedwave' => app(SchedwaveElectricityProvider::class),
             $driver => throw new InvalidArgumentException("Unknown electricity vending driver [{$driver}]."),
         };
     }
@@ -56,6 +59,7 @@ class VendingManager
             'mock' => app(MockBillerProvider::class),
             'morevalue' => app(MoreValueBillerProvider::class),
             'vtpass' => app(VtpassBillerProvider::class),
+            'schedwave' => app(SchedwaveBillerProvider::class),
             default => throw new InvalidArgumentException("Unknown vending driver [{$driver}] for [{$serviceType->value}]."),
         };
     }

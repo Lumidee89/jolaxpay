@@ -23,6 +23,14 @@ return [
     'cable_tv' => ['driver' => env('VENDING_CABLE_TV_DRIVER', 'mock')],
     'education' => ['driver' => env('VENDING_EDUCATION_DRIVER', 'mock')],
 
+    // Schedwave VTU API: airtime, data, cable TV, electricity and exam PINs.
+    // One server-side Bearer key covers every category.
+    'schedwave' => [
+        'base_url' => env('SCHEDWAVE_BASE_URL', 'https://schedwave.com/api/v1'),
+        'api_key' => env('SCHEDWAVE_API_KEY'),
+        'timeout' => (int) env('SCHEDWAVE_TIMEOUT', 30),
+    ],
+
     // MoreValue Digital: https://morevaluedigital.com.ng/api-docs.html
     // Live data/cable plan IDs are confidential and are stored as each
     // BillerVariation::variation_code rather than fetched from an API.

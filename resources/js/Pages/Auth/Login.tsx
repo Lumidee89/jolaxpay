@@ -32,9 +32,10 @@ export default function Login({
         <GuestLayout>
             <Head title="Log in" />
 
-            <div className="mb-6">
-                <h1 className="text-xl font-semibold text-gray-900">Welcome back</h1>
-                <p className="mt-1 text-sm text-gray-500">Sign in to manage transactions, providers, and support.</p>
+            <div className="mb-8">
+                <span className="inline-flex rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">Secure staff access</span>
+                <h1 className="mt-5 text-3xl font-bold tracking-tight text-gray-950">Welcome back</h1>
+                <p className="mt-2 text-sm leading-6 text-gray-500">Enter your staff credentials to continue to the JolaxPay operations dashboard.</p>
             </div>
 
             {status && (
@@ -43,7 +44,7 @@ export default function Login({
                 </div>
             )}
 
-            <form onSubmit={submit}>
+            <form onSubmit={submit} className="space-y-5">
                 <div>
                     <InputLabel htmlFor="email" value="Email" />
 
@@ -52,7 +53,7 @@ export default function Login({
                         type="email"
                         name="email"
                         value={data.email}
-                        className="mt-1 block w-full"
+                        className="mt-2 block h-14 w-full rounded-xl border-gray-200 bg-gray-50 px-4 shadow-none focus:border-brand-500 focus:ring-brand-500"
                         autoComplete="username"
                         isFocused={true}
                         onChange={(e) => setData('email', e.target.value)}
@@ -61,7 +62,7 @@ export default function Login({
                     <InputError message={errors.email} className="mt-2" />
                 </div>
 
-                <div className="mt-4">
+                <div>
                     <InputLabel htmlFor="password" value="Password" />
 
                     <TextInput
@@ -69,7 +70,7 @@ export default function Login({
                         type="password"
                         name="password"
                         value={data.password}
-                        className="mt-1 block w-full"
+                        className="mt-2 block h-14 w-full rounded-xl border-gray-200 bg-gray-50 px-4 shadow-none focus:border-brand-500 focus:ring-brand-500"
                         autoComplete="current-password"
                         onChange={(e) => setData('password', e.target.value)}
                     />
@@ -77,7 +78,7 @@ export default function Login({
                     <InputError message={errors.password} className="mt-2" />
                 </div>
 
-                <div className="mt-4 block">
+                <div className="flex items-center justify-between">
                     <label className="flex items-center">
                         <Checkbox
                             name="remember"
@@ -93,22 +94,20 @@ export default function Login({
                             Remember me
                         </span>
                     </label>
-                </div>
-
-                <div className="mt-4 flex items-center justify-end">
                     {canResetPassword && (
                         <Link
                             href={route('password.request')}
-                            className="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2"
+                            className="rounded-md text-sm font-medium text-brand-700 hover:text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2"
                         >
                             Forgot your password?
                         </Link>
                     )}
 
-                    <PrimaryButton className="ms-4" disabled={processing}>
-                        Log in
-                    </PrimaryButton>
                 </div>
+
+                <PrimaryButton className="flex h-14 w-full justify-center rounded-xl bg-brand-700 text-sm shadow-lg shadow-brand-800/20 hover:bg-brand-800" disabled={processing}>
+                        Log in
+                </PrimaryButton>
             </form>
         </GuestLayout>
     );

@@ -178,6 +178,30 @@ own per-product docs, same as `DiscoSeeder`):
 - Same requery-not-resubmit and pending-past-every-retry caveats as
   electricity apply here too — see `VtpassBillerProvider`'s class docblock.
 
+## Schedwave utility vending
+
+Schedwave is available as a second real utility driver for electricity,
+airtime, data, cable TV, and exam PINs. Add the key from Schedwave Profile →
+API Key as `SCHEDWAVE_API_KEY`, then set any or all of the corresponding
+`VENDING_*_DRIVER` values to `schedwave`. The integration uses Schedwave's
+server-side Bearer authentication; the key is never returned to the mobile
+application.
+
+After selecting the driver, run `php artisan db:seed --class=BillerSeeder`
+and `php artisan schedwave:sync-discos`, followed by
+`php artisan vtpass:sync-variations`. Despite its legacy command name,
+the variation sync resolves each service's currently selected driver, so it
+will fetch Schedwave's current data plans, cable bouquets, and exam prices.
+Schedwave network, cable, electricity-provider, and exam IDs are translated
+inside the provider classes rather than overwriting JolaxPay's stable catalog
+codes. Pending orders are looked up in `/vtu/orders` instead of being
+submitted a second time.
+
+Schedwave currently documents airtime, data, GOtv/DStv/StarTimes, electricity,
+and WAEC/NECO/JAMB/NABTEB exam PINs. It does not document WAEC registration as
+a supported purchase, so JolaxPay rejects that product clearly whenever the
+education driver is `schedwave` rather than sending an incorrect order.
+
 ## Wallets, transfers & Paystack
 
 Every wallet gets a `wallet_address` (e.g. `JLXA1B2C3D4E5`) assigned the

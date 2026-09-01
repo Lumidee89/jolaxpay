@@ -1,110 +1,32 @@
-import StatCard from '@/Components/Admin/StatCard';
 import StatusBadge from '@/Components/Admin/StatusBadge';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 
-interface RecentTransaction {
-    id: number;
-    reference: string;
-    user: { full_name: string } | null;
-    status: string;
-    amount: string;
-    currency: string;
-    created_at: string;
-}
+interface RecentTransaction { id: number; reference: string; user: { full_name: string } | null; status: string; amount: string; currency: string; created_at: string; }
+interface Props { stats: { transactions_today: number; completed_today: number; failed_today: number; in_flight_today: number; success_rate: number | null; open_tickets: number; stuck_transactions: number; degraded_providers: number; }; recentTransactions: RecentTransaction[]; }
 
-interface Props {
-    stats: {
-        transactions_today: number;
-        completed_today: number;
-        failed_today: number;
-        in_flight_today: number;
-        success_rate: number | null;
-        open_tickets: number;
-        stuck_transactions: number;
-        degraded_providers: number;
-    };
-    recentTransactions: RecentTransaction[];
-}
+const Arrow = () => <span className="flex h-8 w-8 items-center justify-center rounded-full border border-current/20"><svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17 17 7M7 7h10v10"/></svg></span>;
+const Card = ({ label, value, primary = false, hint }: { label: string; value: string | number; primary?: boolean; hint: string }) => <div className={`relative min-h-36 overflow-hidden rounded-2xl p-5 ring-1 ${primary ? 'bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 text-white ring-brand-700' : 'bg-white text-gray-950 ring-gray-900/5'}`}><div className="flex items-start justify-between"><span className={`text-sm font-semibold ${primary ? 'text-brand-50' : 'text-gray-700'}`}>{label}</span><Arrow/></div><div className="mt-4 text-4xl font-bold tracking-tight">{value}</div><div className={`mt-2 text-xs ${primary ? 'text-brand-100' : 'text-gray-400'}`}>{hint}</div>{primary && <div className="absolute -bottom-16 -right-12 h-40 w-40 rounded-full border-[26px] border-white/5"/>}</div>;
 
 export default function Dashboard({ stats, recentTransactions }: Props) {
-    return (
-        <AuthenticatedLayout header={<h2 className="text-xl font-semibold text-gray-800">Dashboard</h2>}>
-            <Head title="Dashboard" />
+    const rate = stats.success_rate ?? 0;
+    const maxFlow = Math.max(stats.completed_today, stats.failed_today, stats.in_flight_today, 1);
+    return <AuthenticatedLayout>
+        <Head title="Dashboard"/>
+        <div className="space-y-5 p-5 sm:p-7 lg:p-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="text-3xl font-bold tracking-tight text-gray-950">Dashboard</h1><p className="mt-1 text-sm text-gray-400">Monitor payments, utility delivery and customer operations.</p></div><div className="flex gap-2"><Link href={route('admin.transactions.index')} className="rounded-full border border-brand-700 bg-white px-5 py-2.5 text-sm font-semibold text-brand-800 transition hover:bg-brand-50">View transactions</Link><Link href={route('admin.reconciliation.index')} className="rounded-full bg-brand-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-800/15 transition hover:bg-brand-800">Reconcile now</Link></div></div>
 
-            <div className="mx-auto max-w-7xl space-y-6 py-8 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                    <StatCard label="Transactions today" value={stats.transactions_today} />
-                    <StatCard label="Completed today" value={stats.completed_today} tone="good" />
-                    <StatCard label="Failed today" value={stats.failed_today} tone={stats.failed_today > 0 ? 'bad' : 'default'} />
-                    <StatCard label="In flight" value={stats.in_flight_today} />
-                    <StatCard
-                        label="Success rate"
-                        value={stats.success_rate !== null ? `${stats.success_rate}%` : '—'}
-                        tone="good"
-                    />
-                    <StatCard label="Open tickets" value={stats.open_tickets} tone={stats.open_tickets > 0 ? 'warn' : 'default'} />
-                    <StatCard
-                        label="Stuck transactions"
-                        value={stats.stuck_transactions}
-                        tone={stats.stuck_transactions > 0 ? 'bad' : 'good'}
-                    />
-                    <StatCard
-                        label="Degraded providers"
-                        value={stats.degraded_providers}
-                        tone={stats.degraded_providers > 0 ? 'warn' : 'good'}
-                    />
-                </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Card label="Transactions today" value={stats.transactions_today} primary hint="All payment attempts today"/><Card label="Completed" value={stats.completed_today} hint="Successfully delivered today"/><Card label="In progress" value={stats.in_flight_today} hint="Currently moving through the pipeline"/><Card label="Failed" value={stats.failed_today} hint={stats.failed_today ? 'Requires operational attention' : 'No failures recorded today'}/></div>
 
-                <div className="overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-gray-900/5">
-                    <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                        <h3 className="font-medium text-gray-800">Recent transactions</h3>
-                        <Link href={route('admin.transactions.index')} className="text-sm text-brand-700 hover:underline">
-                            View all
-                        </Link>
-                    </div>
-                    <table className="min-w-full divide-y divide-gray-100 text-sm">
-                        <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
-                            <tr>
-                                <th className="px-6 py-3">Reference</th>
-                                <th className="px-6 py-3">User</th>
-                                <th className="px-6 py-3">Amount</th>
-                                <th className="px-6 py-3">Status</th>
-                                <th className="px-6 py-3">When</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {recentTransactions.map((t) => (
-                                <tr key={t.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-3">
-                                        <Link
-                                            href={route('admin.transactions.show', t.id)}
-                                            className="font-mono text-xs text-brand-700 hover:underline"
-                                        >
-                                            {t.reference.slice(0, 8)}
-                                        </Link>
-                                    </td>
-                                    <td className="px-6 py-3">{t.user?.full_name ?? '—'}</td>
-                                    <td className="px-6 py-3">
-                                        {t.currency} {Number(t.amount).toLocaleString()}
-                                    </td>
-                                    <td className="px-6 py-3">
-                                        <StatusBadge status={t.status} />
-                                    </td>
-                                    <td className="px-6 py-3 text-gray-500">{new Date(t.created_at).toLocaleString()}</td>
-                                </tr>
-                            ))}
-                            {recentTransactions.length === 0 && (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-6 text-center text-gray-400">
-                                        No transactions yet.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+            <div className="grid gap-4 xl:grid-cols-[1.45fr_.85fr]">
+                <section className="rounded-2xl bg-white p-5 ring-1 ring-gray-900/5"><div className="flex items-center justify-between"><div><h2 className="font-bold text-gray-900">Transaction analytics</h2><p className="mt-1 text-xs text-gray-400">Today’s payment pipeline distribution</p></div><span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">Live today</span></div><div className="mt-7 flex h-48 items-end justify-around gap-4 border-b border-gray-100 px-2 sm:px-8">{[{label:'Completed', value:stats.completed_today, color:'bg-brand-700'}, {label:'In flight', value:stats.in_flight_today, color:'bg-brand-300'}, {label:'Failed', value:stats.failed_today, color:'bg-gray-300'}].map((item) => <div key={item.label} className="flex h-full flex-1 flex-col items-center justify-end"><div className="mb-2 text-sm font-bold text-gray-700">{item.value}</div><div className={`w-full max-w-20 rounded-t-2xl ${item.color}`} style={{ height: `${Math.max(10, (item.value / maxFlow) * 82)}%` }}/><div className="absolute"/></div>)}</div><div className="mt-3 flex justify-around text-xs font-medium text-gray-400"><span>Completed</span><span>In flight</span><span>Failed</span></div></section>
+                <section className="rounded-2xl bg-white p-5 ring-1 ring-gray-900/5"><div className="flex items-center justify-between"><div><h2 className="font-bold text-gray-900">Success rate</h2><p className="mt-1 text-xs text-gray-400">Completed versus failed today</p></div><Arrow/></div><div className="flex min-h-56 items-center justify-center"><div className="relative flex h-44 w-44 items-center justify-center rounded-full" style={{ background: `conic-gradient(#8f0e23 0 ${rate}%, #f3e5e7 ${rate}% 100%)` }}><div className="flex h-32 w-32 flex-col items-center justify-center rounded-full bg-white"><span className="text-4xl font-bold text-gray-950">{rate}%</span><span className="mt-1 text-xs text-gray-400">successful</span></div></div></div><div className="flex justify-center gap-5 text-xs text-gray-500"><span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-brand-700"/>Completed</span><span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-brand-100"/>Other</span></div></section>
             </div>
-        </AuthenticatedLayout>
-    );
+
+            <div className="grid gap-4 xl:grid-cols-[1.45fr_.85fr]">
+                <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-gray-900/5"><div className="flex items-center justify-between border-b border-gray-100 px-5 py-4"><div><h2 className="font-bold text-gray-900">Recent transactions</h2><p className="mt-1 text-xs text-gray-400">Latest customer payment activity</p></div><Link href={route('admin.transactions.index')} className="text-xs font-semibold text-brand-700">View all →</Link></div><div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="bg-gray-50/70 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400"><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Amount</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Time</th></tr></thead><tbody className="divide-y divide-gray-50">{recentTransactions.map((t) => <tr key={t.id} className="transition hover:bg-brand-50/30"><td className="px-5 py-3.5"><Link href={route('admin.transactions.show', t.id)} className="font-mono text-xs font-semibold text-brand-700">#{t.reference.slice(0,8)}</Link></td><td className="whitespace-nowrap px-5 py-3.5 font-medium text-gray-700">{t.user?.full_name ?? '—'}</td><td className="whitespace-nowrap px-5 py-3.5 font-semibold text-gray-900">{t.currency} {Number(t.amount).toLocaleString()}</td><td className="px-5 py-3.5"><StatusBadge status={t.status}/></td><td className="whitespace-nowrap px-5 py-3.5 text-xs text-gray-400">{new Date(t.created_at).toLocaleString()}</td></tr>)}{!recentTransactions.length && <tr><td colSpan={5} className="px-5 py-12 text-center text-sm text-gray-400">No transactions yet.</td></tr>}</tbody></table></div></section>
+                <section className="rounded-2xl bg-white p-5 ring-1 ring-gray-900/5"><div className="flex items-center justify-between"><div><h2 className="font-bold text-gray-900">Operations queue</h2><p className="mt-1 text-xs text-gray-400">Items that may need attention</p></div><span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-50 text-brand-700">!</span></div><div className="mt-5 space-y-3">{[{label:'Open support tickets',value:stats.open_tickets,href:route('admin.support.index'), tone:'bg-amber-50 text-amber-700'}, {label:'Stuck transactions',value:stats.stuck_transactions,href:route('admin.transactions.index'),tone:'bg-red-50 text-red-700'}, {label:'Degraded providers',value:stats.degraded_providers,href:route('admin.providers.index'),tone:'bg-brand-50 text-brand-700'}].map((item) => <Link href={item.href} key={item.label} className="flex items-center gap-3 rounded-xl border border-gray-100 p-3.5 transition hover:border-brand-100 hover:bg-brand-50/30"><span className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold ${item.tone}`}>{item.value}</span><span className="flex-1 text-sm font-semibold text-gray-700">{item.label}</span><span className="text-gray-300">→</span></Link>)}</div><div className="mt-5 rounded-xl bg-gradient-to-br from-brand-900 to-brand-700 p-4 text-white"><div className="text-xs font-semibold uppercase tracking-wider text-brand-200">Provider health</div><div className="mt-2 text-lg font-bold">{stats.degraded_providers ? 'Attention required' : 'All systems healthy'}</div><div className="mt-1 text-xs leading-5 text-brand-100/80">Live status across utility vending and payment providers.</div></div></section>
+            </div>
+        </div>
+    </AuthenticatedLayout>;
 }
