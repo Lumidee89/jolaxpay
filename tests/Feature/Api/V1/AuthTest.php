@@ -115,6 +115,24 @@ it('challenges a new device with an OTP instead of issuing a token', function ()
     expect(Otp::where('identifier', $user->phone_number)->where('purpose', 'new_device_login')->exists())->toBeTrue();
 });
 
+it('keeps the SMS new-device OTP flow for a legacy verified customer', function () {
+    $user = User::factory()->create(['password' => 'Password123']);
+
+    $response = $this->postJson('/api/v1/auth/login', [
+        'email' => $user->email,
+        'password' => 'Password123',
+        'device_name' => 'legacy-customer-new-phone',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('requires_otp', true)
+        ->assertJsonPath('purpose', 'new_device_login')
+        ->assertJsonMissing(['requires_email_verification', 'token']);
+
+    expect(Otp::where('identifier', $user->phone_number)
+        ->where('purpose', 'new_device_login')->exists())->toBeTrue();
+});
+
 it('actually sends the new-device OTP through BulkSMSLive when that driver is active', function () {
     config(['notify.sms.driver' => 'bulksmslive', 'notify.sms.api_key' => 'bsl_test_key']);
     Http::fake(['api.bulksmslive.com/*' => Http::response(['status' => 1, 'msgid' => 'x', 'balance' => 500], 200)]);
