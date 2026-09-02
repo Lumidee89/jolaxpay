@@ -101,7 +101,7 @@ class SchedwaveBillerProvider extends SchedwaveClient implements BillerVendingPr
         return collect($response['plans'] ?? [])->map(fn (array $plan) => [
             'variation_code' => (string) $plan['plan_id'],
             'name' => trim(($plan['network'] ?? '').' '.($plan['datasize'] ?? '').' '.($plan['type'] ?? '').' '.($plan['validity'] ?? '').' days'),
-            'amount' => (string) $plan['price'], 'fixed_price' => true,
+            'amount' => $this->customerPlanPrice($plan['price']), 'fixed_price' => true,
         ])->all();
     }
 
@@ -112,7 +112,7 @@ class SchedwaveBillerProvider extends SchedwaveClient implements BillerVendingPr
 
         return collect($response['plans'] ?? [])->map(fn (array $plan) => [
             'variation_code' => (string) $plan['plan_id'], 'name' => (string) $plan['name'],
-            'amount' => (string) $plan['price'], 'fixed_price' => true,
+            'amount' => $this->customerPlanPrice($plan['price']), 'fixed_price' => true,
         ])->all();
     }
 
@@ -126,7 +126,7 @@ class SchedwaveBillerProvider extends SchedwaveClient implements BillerVendingPr
 
         return collect($response['exams'] ?? [])->where('exam_id', $examId)->map(fn (array $exam) => [
             'variation_code' => (string) $exam['exam_id'], 'name' => (string) $exam['name'].' PIN',
-            'amount' => (string) $exam['price'], 'fixed_price' => true,
+            'amount' => $this->customerPlanPrice($exam['price']), 'fixed_price' => true,
         ])->values()->all();
     }
 
@@ -167,6 +167,15 @@ class SchedwaveBillerProvider extends SchedwaveClient implements BillerVendingPr
     private function networkId(Biller $biller): ?int
     {
         return self::NETWORK_IDS[$this->networkName($biller)] ?? null;
+    }
+
+    private function customerPlanPrice(int|float|string $providerPrice): string
+    {
+        return bcadd(
+            (string) $providerPrice,
+            (string) config('vending.schedwave.plan_markup', '50.00'),
+            2,
+        );
     }
 
     private function networkName(Biller $biller): string

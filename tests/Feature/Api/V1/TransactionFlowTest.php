@@ -68,7 +68,7 @@ it('takes a card purchase all the way to delivered', function () {
     $transaction = Transaction::find($id);
     expect($transaction->status->value)->toBe('delivered')
         ->and($transaction->token)->not->toBeNull()
-        ->and($transaction->fee)->toEqual('75.00'); // 1.5% of 5000
+        ->and($transaction->fee)->toEqual('0.00');
 });
 
 it('debits the wallet for a wallet-funded purchase', function () {
@@ -83,7 +83,7 @@ it('debits the wallet for a wallet-funded purchase', function () {
             'payment_method' => 'wallet',
         ])->assertStatus(202);
 
-    expect((float) $wallet->fresh()->balance)->toBe(10000.0 - 5075.0);
+    expect((float) $wallet->fresh()->balance)->toBe(10000.0 - 5000.0);
 });
 
 it('fails cleanly with no side effects when the wallet has insufficient funds', function () {
@@ -120,7 +120,7 @@ it('auto-refunds to wallet when vending fails after payment was captured', funct
 
     expect($transaction->status->value)->toBe('failed')
         ->and($transaction->refunded_to_wallet)->toBeTrue()
-        ->and((float) $wallet->fresh()->balance)->toBe(5075.0);
+        ->and((float) $wallet->fresh()->balance)->toBe(5000.0);
 });
 
 it('replays the original response for a repeated idempotency key instead of double-charging', function () {

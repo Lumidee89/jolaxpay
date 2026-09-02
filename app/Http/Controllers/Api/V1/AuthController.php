@@ -167,6 +167,34 @@ class AuthController extends Controller
         ]);
     }
 
+    public function resendLoginOtp(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'identifier' => ['required', 'string', 'max:255'],
+            'purpose' => ['required', 'in:'.OtpPurpose::NewDeviceLogin->value],
+        ]);
+        $user = User::where('phone_number', $data['identifier'])
+            ->orWhere('email', $data['identifier'])
+            ->first();
+
+        // Keep the response generic so this public endpoint cannot be used
+        // to enumerate JolaxPay accounts. A newly issued OTP becomes the
+        // only valid one because OtpService verifies the latest record.
+        if ($user?->is_active && $user->hasVerifiedEmail()) {
+            $this->otp->issue(
+                $user->phone_number,
+                OtpPurpose::NewDeviceLogin,
+                DeliveryChannel::Sms,
+                $user,
+            );
+        }
+
+        return response()->json([
+            'message' => 'If the account is eligible, a new verification code has been sent by SMS.',
+            'retry_after' => 60,
+        ]);
+    }
+
     public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
     {
         $user = User::where('phone_number', $request->validated('phone_number'))->firstOrFail();

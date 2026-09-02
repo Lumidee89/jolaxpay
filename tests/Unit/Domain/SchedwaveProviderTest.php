@@ -11,7 +11,11 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
-    config(['vending.schedwave.api_key' => 'sched_test_key', 'vending.schedwave.base_url' => 'https://schedwave.test/api/v1']);
+    config([
+        'vending.schedwave.api_key' => 'sched_test_key',
+        'vending.schedwave.base_url' => 'https://schedwave.test/api/v1',
+        'vending.schedwave.plan_markup' => '50.00',
+    ]);
     Cache::flush();
 });
 
@@ -40,7 +44,7 @@ it('purchases a data plan and fetches Schedwave plan pricing', function () {
     $provider = app(SchedwaveBillerProvider::class);
 
     expect($provider->vend($transaction)->successful)->toBeTrue()
-        ->and($provider->fetchVariations($biller)[0])->toMatchArray(['variation_code' => '22', 'amount' => '683']);
+        ->and($provider->fetchVariations($biller)[0])->toMatchArray(['variation_code' => '22', 'amount' => '733.00']);
     Http::assertSent(fn ($request) => str_ends_with($request->url(), '/vtu/data') && $request['network'] === 1 && $request['plan_id'] === 22);
 });
 

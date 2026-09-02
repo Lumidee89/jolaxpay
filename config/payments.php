@@ -31,8 +31,7 @@ return [
         'timeout' => (int) env('SAFEHAVEN_TIMEOUT', 30),
     ],
 
-    // Transparent, itemised convenience fee (PRD §7.9, §10) — a flat rate
-    // for now; swap for a tiered/service-type-aware schedule as pricing
-    // is finalised.
-    'convenience_fee_rate' => env('CONVENIENCE_FEE_RATE', '0.015'),
+    // Percentage convenience fee is disabled. Schedwave plan products use
+    // their own flat catalog markup configured under vending.schedwave.
+    'convenience_fee_rate' => env('CONVENIENCE_FEE_RATE', '0'),
 ];

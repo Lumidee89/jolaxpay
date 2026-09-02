@@ -42,6 +42,7 @@ Route::prefix('v1')->group(function () {
     Route::get('auth/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
         ->middleware(['signed', 'throttle:6,1'])->name('api.verification.verify');
     Route::post('auth/otp/verify', [AuthController::class, 'verifyOtp']);
+    Route::post('auth/otp/resend', [AuthController::class, 'resendLoginOtp'])->middleware('throttle:3,1');
     Route::post('auth/password/forgot', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
     Route::post('auth/password/reset', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1');
     Route::get('providers/status', [ProviderStatusController::class, 'index']);

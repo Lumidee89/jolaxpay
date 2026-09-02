@@ -150,6 +150,24 @@ it('actually sends the new-device OTP through BulkSMSLive when that driver is ac
         && str_contains($request['message'], 'verification code'));
 });
 
+it('resends a fresh SMS code for a new-device login challenge', function () {
+    config(['notify.sms.driver' => 'bulksmslive', 'notify.sms.api_key' => 'bsl_test_key']);
+    Http::fake(['api.bulksmslive.com/*' => Http::response(['status' => 1, 'msgid' => 'x', 'balance' => 500], 200)]);
+    $user = User::factory()->create(['phone_number' => '08031234567']);
+
+    $this->postJson('/api/v1/auth/otp/resend', [
+        'identifier' => $user->phone_number,
+        'purpose' => 'new_device_login',
+    ])->assertOk()
+        ->assertJsonPath('retry_after', 60);
+
+    expect(Otp::where('identifier', $user->phone_number)
+        ->where('purpose', 'new_device_login')->count())->toBe(1);
+    Http::assertSentCount(1);
+    Http::assertSent(fn ($request) => $request['recipients'] === '2348031234567'
+        && str_contains($request['message'], 'verification code'));
+});
+
 it('logs a new device straight in when AUTH_BYPASS_LOGIN_OTP is enabled', function () {
     config(['identity.bypass_login_otp' => true]);
 

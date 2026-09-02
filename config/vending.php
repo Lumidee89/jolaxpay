@@ -29,6 +29,7 @@ return [
         'base_url' => env('SCHEDWAVE_BASE_URL', 'https://schedwave.com/api/v1'),
         'api_key' => env('SCHEDWAVE_API_KEY'),
         'timeout' => (int) env('SCHEDWAVE_TIMEOUT', 30),
+        'plan_markup' => (string) env('SCHEDWAVE_PLAN_MARKUP', '50.00'),
     ],
 
     // MoreValue Digital: https://morevaluedigital.com.ng/api-docs.html

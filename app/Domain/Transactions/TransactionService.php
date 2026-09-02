@@ -167,7 +167,7 @@ class TransactionService
 
     public function calculateFee(string $amount): string
     {
-        return bcmul($amount, (string) config('payments.convenience_fee_rate', '0.015'), 2);
+        return bcmul($amount, (string) config('payments.convenience_fee_rate', '0'), 2);
     }
 
     /**
