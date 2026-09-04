@@ -51,6 +51,8 @@ Route::prefix('admin')->group(function () {
         });
 
         Route::middleware('permission:manage-support')->group(function () {
+            Route::resource('announcements', \App\Http\Controllers\Admin\AnnouncementController::class)
+                ->only(['index', 'store', 'update', 'destroy'])->names('admin.announcements');
             Route::get('support', [SupportTicketController::class, 'index'])->name('admin.support.index');
             Route::get('support/{supportTicket}', [SupportTicketController::class, 'show'])->name('admin.support.show');
             Route::post('support/{supportTicket}/reply', [SupportTicketController::class, 'reply'])->name('admin.support.reply');

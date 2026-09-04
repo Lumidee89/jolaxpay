@@ -53,6 +53,7 @@ Route::prefix('v1')->group(function () {
 
     // --- Authenticated (Sanctum) ---
     Route::middleware(['auth:sanctum', 'email.verified'])->group(function () {
+        Route::get('announcements', [\App\Http\Controllers\Api\V1\AnnouncementController::class, 'index']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::patch('auth/profile', [AuthController::class, 'updateProfile']);

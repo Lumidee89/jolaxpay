@@ -13,6 +13,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Providers', route: 'admin.providers.index', icon: 'pulse', permission: 'manage-providers' },
     { label: 'Support', route: 'admin.support.index', icon: 'chat', permission: 'manage-support' },
     { label: 'Knowledge base', route: 'admin.faq.index', icon: 'book', permission: 'manage-support' },
+    { label: 'Announcements', route: 'admin.announcements.index', icon: 'chat', permission: 'manage-support' },
     { label: 'Agent referrals', route: 'admin.referrals.index', icon: 'gift', permission: 'manage-referrals' },
     { label: 'Fraud monitoring', route: 'admin.fraud.index', icon: 'shield', permission: 'manage-fraud' },
     { label: 'Users', route: 'admin.users.index', icon: 'users', permission: 'manage-users' },
