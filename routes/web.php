@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AnalyticsController;
+use App\Http\Controllers\Admin\AnnouncementController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FaqArticleController;
 use App\Http\Controllers\Admin\FraudFlagController;
@@ -25,7 +26,7 @@ use Inertia\Inertia;
 | staff. There is deliberately no self-serve registration (routes/auth.php)
 | — see App\Console\Commands\CreateAdminUser.
 */
-Route::get('/', fn () => redirect()->route('login'));
+Route::view('/', 'website.home')->name('home');
 
 Route::prefix('admin')->group(function () {
     require __DIR__.'/auth.php';
@@ -51,7 +52,7 @@ Route::prefix('admin')->group(function () {
         });
 
         Route::middleware('permission:manage-support')->group(function () {
-            Route::resource('announcements', \App\Http\Controllers\Admin\AnnouncementController::class)
+            Route::resource('announcements', AnnouncementController::class)
                 ->only(['index', 'store', 'update', 'destroy'])->names('admin.announcements');
             Route::get('support', [SupportTicketController::class, 'index'])->name('admin.support.index');
             Route::get('support/{supportTicket}', [SupportTicketController::class, 'show'])->name('admin.support.show');

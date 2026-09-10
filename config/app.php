@@ -54,6 +54,11 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'mobile_apps' => [
+        'android_url' => env('JOLAXPAY_ANDROID_APP_URL'),
+        'ios_url' => env('JOLAXPAY_IOS_APP_URL'),
+    ],
+
     'mobile_email_verified_url' => env('MOBILE_EMAIL_VERIFIED_URL', 'jolaxpay://email-verified'),
 
     /*
