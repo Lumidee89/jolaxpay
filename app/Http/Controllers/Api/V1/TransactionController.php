@@ -109,6 +109,13 @@ class TransactionController extends Controller
 
         $transaction = $this->transactions->initiate($request->user(), $data);
 
+        if ($this->failedForInsufficientFunds($transaction)) {
+            return response()->json([
+                'message' => 'Insufficient wallet balance. Fund your wallet or choose card payment to continue.',
+                'code' => 'insufficient_funds',
+            ], 422);
+        }
+
         return response()->json(['data' => TransactionDetailResource::make($transaction)], 202);
     }
 
@@ -153,6 +160,13 @@ class TransactionController extends Controller
         ];
 
         $repeated = $this->transactions->initiate($request->user(), $payload);
+
+        if ($this->failedForInsufficientFunds($repeated)) {
+            return response()->json([
+                'message' => 'Insufficient wallet balance. Fund your wallet or choose card payment to continue.',
+                'code' => 'insufficient_funds',
+            ], 422);
+        }
 
         return response()->json(['data' => TransactionDetailResource::make($repeated)], 202);
     }
@@ -224,5 +238,17 @@ class TransactionController extends Controller
             $transaction->user_id === $user->id || $transaction->recipient_user_id === $user->id || $user->isStaff(),
             403,
         );
+    }
+
+    protected function failedForInsufficientFunds(Transaction $transaction): bool
+    {
+        if ($transaction->payment_method !== 'wallet' || $transaction->status !== TransactionStatus::Failed) {
+            return false;
+        }
+
+        return $transaction->statusHistory()
+            ->where('to_status', TransactionStatus::Failed->value)
+            ->where('note', 'like', 'Insufficient wallet balance:%')
+            ->exists();
     }
 }

@@ -13,6 +13,11 @@ Artisan::command('inspire', function () {
 // `schedule:run` every minute) to actually fire.
 Schedule::command('purchases:evaluate-scheduled')->everyFiveMinutes()->withoutOverlapping();
 
+// Webhooks remain the primary confirmation path. This closes the gap when
+// Paystack cannot reach the webhook or a customer closes the app before its
+// status poll, and is idempotent once an intent has been credited.
+Schedule::command('payments:reconcile-paystack')->everyMinute()->withoutOverlapping();
+
 // MoreValue keeps its live plan/provider IDs behind the vendor dashboard,
 // so no public catalog can be safely synchronized. Operations maintains
 // those IDs in biller_variations and the MOREVALUE_*_PROVIDER_ID settings.

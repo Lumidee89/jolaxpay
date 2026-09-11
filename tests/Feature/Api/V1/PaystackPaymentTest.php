@@ -143,6 +143,45 @@ it('reconciles a pending funding intent by asking Paystack directly when no webh
     expect((float) WalletFundingIntent::where('reference', $reference)->first()->wallet->fresh()->balance)->toBe(3000.0);
 });
 
+it('recovers successful pending Paystack funding through scheduled reconciliation', function () {
+    Http::fake([
+        'api.paystack.co/transaction/initialize' => Http::response([
+            'status' => true, 'data' => ['authorization_url' => 'https://checkout.paystack.com/x', 'access_code' => 'x', 'reference' => 'x'],
+        ], 200),
+        'api.paystack.co/transaction/verify/*' => Http::response([
+            'status' => true, 'data' => ['status' => 'success', 'amount' => 300000],
+        ], 200),
+    ]);
+
+    $init = $this->postJson('/api/v1/wallet/fund', ['amount' => '3000', 'currency' => 'NGN', 'payment_method' => 'card']);
+    $reference = $init->json('reference');
+
+    $this->artisan('payments:reconcile-paystack')->assertSuccessful();
+
+    $intent = WalletFundingIntent::where('reference', $reference)->first();
+    expect($intent->status)->toBe('success')
+        ->and((float) $intent->wallet->fresh()->balance)->toBe(3000.0);
+});
+
+it('blocks a Paystack wallet credit when the verified amount is different', function () {
+    Http::fake([
+        'api.paystack.co/transaction/initialize' => Http::response([
+            'status' => true, 'data' => ['authorization_url' => 'https://checkout.paystack.com/x', 'access_code' => 'x', 'reference' => 'x'],
+        ], 200),
+        'api.paystack.co/transaction/verify/*' => Http::response([
+            'status' => true, 'data' => ['status' => 'success', 'amount' => 100000],
+        ], 200),
+    ]);
+
+    $init = $this->postJson('/api/v1/wallet/fund', ['amount' => '3000', 'currency' => 'NGN', 'payment_method' => 'card']);
+    $intent = WalletFundingIntent::where('reference', $init->json('reference'))->first();
+
+    $this->artisan('payments:reconcile-paystack')->assertSuccessful();
+
+    expect($intent->fresh()->status)->toBe('pending')
+        ->and((float) $intent->wallet->fresh()->balance)->toBe(0.0);
+});
+
 it('reconciles a pending transaction by asking Paystack directly when no webhook has arrived', function () {
     Http::fake([
         'api.paystack.co/transaction/initialize' => Http::response([

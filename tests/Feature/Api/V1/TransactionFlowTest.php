@@ -6,6 +6,8 @@ use App\Models\Disco;
 use App\Models\Meter;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Jobs\ProcessVending;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 
 /**
@@ -98,11 +100,32 @@ it('fails cleanly with no side effects when the wallet has insufficient funds', 
             'payment_method' => 'wallet',
         ]);
 
-    $id = $response->json('data.id');
-    $transaction = Transaction::find($id);
+    $response->assertStatus(422)
+        ->assertJsonPath('code', 'insufficient_funds')
+        ->assertJsonPath('message', 'Insufficient wallet balance. Fund your wallet or choose card payment to continue.');
+
+    $transaction = Transaction::latest('id')->firstOrFail();
 
     expect($transaction->status->value)->toBe('failed')
         ->and((float) $wallet->fresh()->balance)->toBe(100.0); // untouched
+});
+
+it('does not queue vending when the wallet cannot cover the purchase', function () {
+    Queue::fake();
+    $wallet = app(LedgerService::class)->walletFor($this->user);
+
+    $this->withHeader('Idempotency-Key', 'test-key-no-vend')
+        ->postJson('/api/v1/transactions', [
+            'meter_id' => $this->meter->id,
+            'amount' => '5000',
+            'payment_method' => 'wallet',
+        ])
+        ->assertStatus(422)
+        ->assertJsonPath('code', 'insufficient_funds');
+
+    expect($wallet->fresh()->balance)->toBe('0.00')
+        ->and(Transaction::latest('id')->first()->status->value)->toBe('failed');
+    Queue::assertNotPushed(ProcessVending::class);
 });
 
 it('auto-refunds to wallet when vending fails after payment was captured', function () {

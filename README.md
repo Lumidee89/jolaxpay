@@ -60,6 +60,7 @@ You need four processes for the full purchase pipeline to work end-to-end
 ```bash
 php artisan serve              # http://localhost:8000 — API + admin
 php artisan queue:work         # processes ProcessTransactionPayment/ProcessVending/DeliverToken
+php artisan schedule:work      # recurring purchases + pending Paystack reconciliation
 php artisan reverb:start       # realtime broadcasting (private-transaction.{id})
 npm run dev                    # Vite dev server for the admin UI (skip if you ran `npm run build`)
 ```
@@ -213,12 +214,10 @@ user sends it money, deliberately not the account's phone/email.
   external processor involved. Both wallets are locked in a fixed id order
   (`LedgerService::transfer()`) so two simultaneous opposite-direction
   transfers can't deadlock each other.
-- **Card payments (purchases + wallet funding) and bank withdrawals all go
-  through Paystack** (`App\Domain\Payments\PaystackGateway`,
-  https://paystack.com/docs/api/) once `PAYMENTS_DOMESTIC_DRIVER=paystack`
-  — set `PAYSTACK_SECRET_KEY`/`PAYSTACK_PUBLIC_KEY`/`PAYSTACK_CALLBACK_URL`
-  to activate; `mock` (the default) keeps everything synchronous and
-  instant for local dev, same bootstrap pattern as VTpass.
+- **Card payments, wallet funding, and bank withdrawals** use the provider
+  selected under Admin → Payment routing (Paystack or Safe Haven). Configure
+  both providers in `.env`; the database-backed switch applies to new
+  operations immediately.
 - Unlike VTpass, Paystack's checkout is a **hosted-page redirect**, not a
   server-to-server call our code can get a result back from directly: the
   mobile app opens `paystack_authorization_url` (present on a transaction
@@ -229,6 +228,13 @@ user sends it money, deliberately not the account's phone/email.
   HMAC-SHA512 header — `PaystackGateway::verifyWebhookSignature()`) is what
   actually confirms it — see `PaystackWebhookController` and
   `TransactionService::initializePaystackCheckout()`/`processPayment()`.
+- In Paystack's live Dashboard, set the webhook URL to
+  `https://jolaxpay.com/api/v1/webhooks/paystack`. This is different from
+  `PAYSTACK_CALLBACK_URL`, which only returns the checkout WebView to the app.
+  The scheduler also runs `payments:reconcile-paystack` every minute as an
+  idempotent fallback, verifying and crediting pending successful funding
+  when a webhook or mobile status poll is missed. Run that command manually
+  after deployment to recover existing pending funding intents.
 - Withdrawals (`WithdrawalController`) resolve the destination account name
   via Paystack before ever moving money, debit the wallet immediately
   (held, same "debit now, reverse on failure" pattern as a purchase —

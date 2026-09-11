@@ -139,6 +139,13 @@ class TransactionService
             $this->paymentProvider->is('paystack')
                 ? $this->initializePaystackCheckout($transaction, $user)
                 : $this->initializeSafeHavenCheckout($transaction, $user);
+        } elseif ($transaction->payment_method === 'wallet') {
+            // Wallet capture is local and must complete before checkout is
+            // acknowledged. This guarantees that an insufficient balance
+            // receives an immediate 422 response and that vending is never
+            // queued without secured funds. LedgerService::debit() locks the
+            // wallet row, so simultaneous purchases cannot overspend it.
+            $this->processPayment($transaction);
         } else {
             ProcessTransactionPayment::dispatch($transaction);
         }

@@ -11,6 +11,7 @@ use App\Enums\TransactionStatus;
 use App\Jobs\ProcessTransactionPayment;
 use App\Models\Transaction;
 use App\Models\WalletFundingIntent;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -48,7 +49,7 @@ class PaystackChargeReconciler
         $status = $data['status'] ?? null;
 
         if ($status === 'success') {
-            $this->markChargeSuccessful($reference);
+            $this->markChargeSuccessful($reference, $data);
         } elseif (in_array($status, ['failed', 'abandoned', 'reversed'], true)) {
             $this->markChargeFailed($reference, $data['gateway_response'] ?? null);
         }
@@ -56,14 +57,35 @@ class PaystackChargeReconciler
         return $status ?? 'unknown';
     }
 
-    public function markChargeSuccessful(string $reference): void
+    public function markChargeSuccessful(string $reference, array $providerData = []): void
     {
-        if ($intent = WalletFundingIntent::where('reference', $reference)->where('status', 'pending')->first()) {
+        $confirmation = DB::transaction(function () use ($reference, $providerData) {
+            $intent = WalletFundingIntent::where('reference', $reference)->lockForUpdate()->first();
+            if (! $intent || $intent->status !== 'pending') {
+                return null;
+            }
+
+            if (isset($providerData['amount']) && (int) $providerData['amount'] !== (int) round((float) $intent->amount * 100)) {
+                Log::critical('Paystack funding amount mismatch — credit blocked', [
+                    'intent_id' => $intent->id,
+                    'expected_kobo' => (int) round((float) $intent->amount * 100),
+                    'received_kobo' => (int) $providerData['amount'],
+                ]);
+
+                return null;
+            }
+
             $wallet = $intent->wallet;
             $entry = $this->ledger->credit($wallet, (string) $intent->amount, LedgerReason::WalletFunding, null, [
                 'paystack_reference' => $reference,
             ]);
             $intent->update(['status' => 'success']);
+
+            return compact('intent', 'wallet', 'entry');
+        });
+
+        if ($confirmation) {
+            ['intent' => $intent, 'wallet' => $wallet, 'entry' => $entry] = $confirmation;
 
             $this->notifier->send($intent->user, 'wallet_funded', DeliveryChannel::InApp, [
                 'amount' => (string) $intent->amount,

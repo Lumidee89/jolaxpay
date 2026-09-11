@@ -60,7 +60,7 @@ class PaystackWebhookController extends Controller
     protected function handleChargeSuccess(array $data): void
     {
         if ($reference = $data['reference'] ?? null) {
-            $this->reconciler->markChargeSuccessful($reference);
+            $this->reconciler->markChargeSuccessful($reference, $data);
         }
     }
 

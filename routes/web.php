@@ -37,6 +37,8 @@ Route::prefix('admin')->group(function () {
     // individual actions below layer on their own narrower permission.
     Route::middleware(['auth', 'verified', 'permission:view-dashboard'])->group(function () {
         Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+        Route::post('reconcile-paystack', [DashboardController::class, 'reconcilePaystack'])
+            ->middleware('permission:view-reconciliation')->name('admin.paystack.reconcile');
         Route::get('analytics', [AnalyticsController::class, 'index'])->name('admin.analytics.index');
 
         Route::get('transactions', [TransactionController::class, 'index'])->name('admin.transactions.index');
