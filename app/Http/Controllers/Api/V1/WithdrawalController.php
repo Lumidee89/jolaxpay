@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Payments\PaymentProviderSelector;
+use App\Domain\Payments\PaystackGateway;
 use App\Domain\Payments\SafeHavenGateway;
 use App\Domain\Wallet\Exceptions\InsufficientFundsException;
 use App\Domain\Wallet\LedgerService;
@@ -24,6 +26,8 @@ class WithdrawalController extends Controller
     public function __construct(
         private readonly LedgerService $ledger,
         private readonly SafeHavenGateway $safeHaven,
+        private readonly PaystackGateway $paystack,
+        private readonly PaymentProviderSelector $paymentProvider,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -36,15 +40,22 @@ class WithdrawalController extends Controller
     /** Cached a day because the NIP bank directory changes infrequently. */
     public function banks(): JsonResponse
     {
-        $banks = Cache::remember('safehaven:banks', now()->addDay(), fn () => $this->safeHaven->listBanks());
+        $provider = $this->paymentProvider->active();
+        $banks = Cache::remember("{$provider}:banks", now()->addDay(), fn () => $provider === 'paystack'
+            ? $this->paystack->listBanks() : $this->safeHaven->listBanks());
 
-        return response()->json(['data' => $banks]);
+        if ($provider === 'paystack' && str_starts_with((string) config('payments.paystack.secret_key'), 'sk_test_')) {
+            array_unshift($banks, ['name' => 'Test Bank (sandbox — verifies only, cannot complete a withdrawal)', 'code' => '001']);
+        }
+
+        return response()->json(['data' => $banks, 'provider' => $provider])
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     public function resolveAccount(ResolveAccountRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $account = $this->safeHaven->resolveAccount($data['account_number'], $data['bank_code']);
+        $account = $this->resolve($data['account_number'], $data['bank_code']);
 
         if (! $account) {
             return response()->json(['message' => 'Could not verify that account number. Double-check it and try again.'], 422);
@@ -58,7 +69,8 @@ class WithdrawalController extends Controller
         $data = $request->validated();
         $wallet = $this->ledger->walletFor($request->user());
 
-        $account = $this->safeHaven->resolveAccount($data['account_number'], $data['bank_code']);
+        $provider = $this->paymentProvider->active();
+        $account = $this->resolve($data['account_number'], $data['bank_code']);
 
         if (! $account) {
             return response()->json(['message' => 'Could not verify that account number. Double-check it and try again.'], 422);
@@ -73,7 +85,7 @@ class WithdrawalController extends Controller
             return response()->json(['message' => 'Insufficient wallet balance.'], 422);
         }
 
-        $bankName = collect($this->safeHaven->listBanks())->firstWhere('code', $data['bank_code'])['name'] ?? null;
+        $bankName = collect($provider === 'paystack' ? $this->paystack->listBanks() : $this->safeHaven->listBanks())->firstWhere('code', $data['bank_code'])['name'] ?? null;
         $reference = 'wd-'.Str::uuid();
 
         $withdrawal = Withdrawal::create([
@@ -89,10 +101,15 @@ class WithdrawalController extends Controller
             'status' => 'pending',
         ]);
 
-        $transfer = $this->safeHaven->transfer(
-            $data['account_number'], $data['bank_code'], $account['name_enquiry_reference'],
-            (float) $data['amount'], $reference, 'JolaxPay wallet withdrawal'
-        );
+        if ($provider === 'paystack') {
+            $recipient = $this->paystack->createTransferRecipient($data['account_number'], $data['bank_code'], $account['account_name']);
+            $transfer = $recipient ? $this->paystack->initiateTransfer($recipient, (int) round((float) $data['amount'] * 100), $reference, 'JolaxPay wallet withdrawal') : null;
+        } else {
+            $transfer = $this->safeHaven->transfer(
+                $data['account_number'], $data['bank_code'], $account['name_enquiry_reference'],
+                (float) $data['amount'], $reference, 'JolaxPay wallet withdrawal'
+            );
+        }
 
         if (! $transfer) {
             $this->reverse($withdrawal, 'Could not initiate the transfer with our payout provider.');
@@ -100,18 +117,34 @@ class WithdrawalController extends Controller
             return response()->json(['message' => 'Withdrawal could not be started — please try again.'], 422);
         }
 
-        $withdrawal->update(['provider_transfer_id' => $transfer['_id'] ?? $transfer['paymentReference'] ?? null]);
+        $withdrawal->update(['provider_transfer_id' => $transfer['_id'] ?? $transfer['paymentReference'] ?? $transfer['transfer_code'] ?? null]);
 
         // Paystack's sandbox returns 'success' synchronously (no real
         // processing happens there); live transfers come back 'pending'
         // and resolve via webhook. Marking it here too when Paystack
         // already says success is harmless — the webhook handler only
         // acts on rows still 'pending'.
-        if (strtolower((string) ($transfer['status'] ?? '')) === 'completed') {
+        if (in_array(strtolower((string) ($transfer['status'] ?? '')), ['completed', 'success'], true)) {
             $withdrawal->update(['status' => 'success']);
         }
 
         return response()->json(['data' => WithdrawalResource::make($withdrawal->fresh())], 201);
+    }
+
+    private function resolve(string $accountNumber, string $bankCode): ?array
+    {
+        $account = $this->paymentProvider->is('paystack')
+            ? $this->paystack->resolveAccount($accountNumber, $bankCode)
+            : $this->safeHaven->resolveAccount($accountNumber, $bankCode);
+        if (! $account) {
+            return null;
+        }
+
+        return [
+            'account_name' => $account['account_name'] ?? $account['accountName'] ?? null,
+            'account_number' => $account['account_number'] ?? $accountNumber,
+            'name_enquiry_reference' => $account['name_enquiry_reference'] ?? $account['sessionId'] ?? null,
+        ];
     }
 
     /** Refunds the held amount and marks the withdrawal failed — used when Paystack rejects the withdrawal before a transfer is even in flight (nothing for its webhook to resolve). */

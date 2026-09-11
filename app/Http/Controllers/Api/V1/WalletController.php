@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Notifications\NotificationDispatcher;
 use App\Domain\Payments\PaymentManager;
+use App\Domain\Payments\PaymentProviderSelector;
+use App\Domain\Payments\PaystackChargeReconciler;
+use App\Domain\Payments\PaystackGateway;
 use App\Domain\Payments\SafeHavenFundingService;
 use App\Domain\Payments\SafeHavenGateway;
 use App\Domain\Wallet\Exceptions\InsufficientFundsException;
@@ -33,6 +36,9 @@ class WalletController extends Controller
         private readonly PaymentManager $paymentManager,
         private readonly SafeHavenGateway $safeHaven,
         private readonly SafeHavenFundingService $safeHavenFunding,
+        private readonly PaystackGateway $paystack,
+        private readonly PaystackChargeReconciler $paystackReconciler,
+        private readonly PaymentProviderSelector $paymentProvider,
         private readonly NotificationDispatcher $notifier,
     ) {}
 
@@ -61,7 +67,29 @@ class WalletController extends Controller
         $data = $request->validated();
         $wallet = $this->ledger->walletFor($request->user(), $data['currency'] ?? 'NGN');
 
-        if (config('payments.domestic.driver') === 'safehaven' && $wallet->currency === config('payments.domestic_currency', 'NGN')) {
+        if ($this->paymentProvider->is('paystack') && $wallet->currency === config('payments.domestic_currency', 'NGN')) {
+            $reference = 'fund-'.Str::uuid();
+            $checkout = $this->paystack->initializeTransaction(
+                $request->user()->email, (int) round((float) $data['amount'] * 100), $reference,
+                ['purpose' => 'wallet_funding', 'user_id' => $request->user()->id]
+            );
+            if (! $checkout) {
+                return response()->json(['message' => 'Could not start Paystack funding — please try again.'], 422);
+            }
+            WalletFundingIntent::create([
+                'user_id' => $request->user()->id, 'wallet_id' => $wallet->id, 'reference' => $reference,
+                'amount' => $data['amount'], 'currency' => $wallet->currency, 'status' => 'pending',
+                'meta' => ['provider' => 'paystack', 'method' => 'checkout'],
+            ]);
+
+            return response()->json([
+                'funding_method' => 'paystack_checkout', 'reference' => $reference,
+                'requires_redirect' => true,
+                'authorization_url' => $checkout['authorization_url'],
+            ], 202);
+        }
+
+        if ($this->paymentProvider->is('safehaven') && $wallet->currency === config('payments.domestic_currency', 'NGN')) {
             $reference = 'fund-'.Str::uuid();
             $method = $data['payment_method'] === 'card' ? 'checkout' : 'virtual_account';
             $intent = WalletFundingIntent::create([
@@ -71,7 +99,7 @@ class WalletController extends Controller
                 'amount' => $data['amount'],
                 'currency' => $wallet->currency,
                 'status' => 'pending',
-                'meta' => ['method' => $method],
+                'meta' => ['provider' => 'safehaven', 'method' => $method],
             ]);
             if ($method === 'checkout') {
                 return response()->json([
@@ -90,9 +118,14 @@ class WalletController extends Controller
                 ], 202);
             }
             $account = $this->safeHaven->createVirtualAccount((float) $data['amount'], $reference);
-            if (! $account) { $intent->delete(); return response()->json(['message' => 'Could not create a funding account — please try again.'], 422); }
+            if (! $account) {
+                $intent->delete();
+
+                return response()->json(['message' => 'Could not create a funding account — please try again.'], 422);
+            }
             $accountData = $account['account'] ?? $account;
             $intent->update(['meta' => [...$intent->meta, 'virtual_account_id' => $account['_id'] ?? $accountData['_id'] ?? null]]);
+
             return response()->json(['funding_method' => 'virtual_account', 'reference' => $reference, 'virtual_account' => [
                 'id' => $account['_id'] ?? $accountData['_id'] ?? null,
                 'account_number' => $accountData['accountNumber'] ?? $accountData['number'] ?? null,
@@ -149,13 +182,20 @@ class WalletController extends Controller
             ->where('user_id', $request->user()->id)
             ->firstOrFail();
 
-        if ($intent->status === 'pending' && ($intent->meta['virtual_account_id'] ?? null)) {
+        if ($intent->status === 'pending' && ($intent->meta['provider'] ?? null) === 'paystack') {
+            $this->paystackReconciler->reconcile($reference);
+            $intent->refresh();
+        } elseif ($intent->status === 'pending' && ($intent->meta['virtual_account_id'] ?? null)) {
             $transaction = $this->safeHaven->virtualAccountTransaction($intent->meta['virtual_account_id']);
-            if ($transaction) $this->safeHavenFunding->confirm($reference, $transaction);
+            if ($transaction) {
+                $this->safeHavenFunding->confirm($reference, $transaction);
+            }
             $intent->refresh();
         } elseif ($intent->status === 'pending' && ($intent->meta['method'] ?? null) === 'checkout') {
             $transaction = $this->safeHaven->verifyCheckout($reference);
-            if ($transaction) $this->safeHavenFunding->confirm($reference, $transaction);
+            if ($transaction) {
+                $this->safeHavenFunding->confirm($reference, $transaction);
+            }
             $intent->refresh();
         }
 

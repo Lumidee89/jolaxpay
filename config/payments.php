@@ -31,6 +31,14 @@ return [
         'timeout' => (int) env('SAFEHAVEN_TIMEOUT', 30),
     ],
 
+    'paystack' => [
+        'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
+        'secret_key' => env('PAYSTACK_SECRET_KEY'),
+        'public_key' => env('PAYSTACK_PUBLIC_KEY'),
+        'callback_url' => env('PAYSTACK_CALLBACK_URL'),
+        'timeout' => (int) env('PAYSTACK_TIMEOUT', 30),
+    ],
+
     // Percentage convenience fee is disabled. Schedwave plan products use
     // their own flat catalog markup configured under vending.schedwave.
     'convenience_fee_rate' => env('CONVENIENCE_FEE_RATE', '0'),

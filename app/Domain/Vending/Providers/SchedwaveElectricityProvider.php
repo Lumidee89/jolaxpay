@@ -9,6 +9,7 @@ use App\Models\Disco;
 use App\Models\Meter;
 use App\Models\Transaction;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class SchedwaveElectricityProvider extends SchedwaveClient implements VendingProviderContract
 {
@@ -65,12 +66,90 @@ class SchedwaveElectricityProvider extends SchedwaveClient implements VendingPro
             'meter_type' => strtolower($meter->meter_type),
             'disco' => $providerId,
         ]);
-        if ($response === null || ($response['error'] ?? true)) {
-            return new MeterVerificationResult(valid: false, message: $this->message($response, 'This meter number could not be verified.'), raw: $response ?? []);
+        if ($response === null) {
+            return new MeterVerificationResult(
+                valid: false,
+                message: 'Meter verification is temporarily unavailable. Please try again shortly.',
+            );
+        }
+
+        if ($this->isExplicitInvalidMeterResponse($response)) {
+            Log::info('Schedwave rejected an electricity meter lookup.', [
+                'disco_id' => $providerId,
+                'meter_type' => strtolower($meter->meter_type),
+                'error_code' => $response['error_code'] ?? null,
+                'provider_message' => $response['message'] ?? null,
+            ]);
+
+            return new MeterVerificationResult(
+                valid: false,
+                message: 'The meter number is incorrect for the selected DisCo or meter type. Check the details and try again.',
+                raw: $response,
+            );
+        }
+
+        if ($this->isAmbiguousVerificationFailure($response)) {
+            Log::warning('Schedwave could not resolve an electricity meter lookup.', [
+                'disco_id' => $providerId,
+                'meter_type' => strtolower($meter->meter_type),
+                'provider_message' => $response['message'] ?? null,
+            ]);
+
+            return new MeterVerificationResult(
+                valid: false,
+                message: 'Schedwave could not confirm this meter right now. The meter may still be valid—please try again shortly.',
+                raw: $response,
+            );
+        }
+
+        if (($response['error'] ?? true) === true) {
+            return new MeterVerificationResult(
+                valid: false,
+                message: 'The electricity provider could not verify this meter right now. Please try again shortly.',
+                raw: $response,
+            );
         }
 
         return new MeterVerificationResult(valid: true, customerName: $response['name'] ?? null,
             address: $response['address'] ?? null, message: $response['message'] ?? 'Meter verified.', raw: $response);
+    }
+
+    private function isExplicitInvalidMeterResponse(array $response): bool
+    {
+        $errorCode = strtoupper((string) ($response['error_code'] ?? ''));
+        if (in_array($errorCode, ['NOT_FOUND', 'INVALID_METER', 'INVALID_METER_NUMBER'], true)) {
+            return true;
+        }
+
+        $text = strtolower(implode(' ', array_filter([
+            $response['name'] ?? null,
+            $response['address'] ?? null,
+            $response['message'] ?? null,
+        ], 'is_string')));
+
+        return collect([
+            'invalid meter',
+            'incorrect meter',
+            'meter not found',
+            'customer not found',
+        ])->contains(fn (string $phrase) => str_contains($text, $phrase));
+    }
+
+    /**
+     * Schedwave currently sometimes returns error=false with "Unable to
+     * verify" placeholders even for known meters. That is an upstream
+     * indeterminate result, not evidence that the customer's number is wrong.
+     */
+    private function isAmbiguousVerificationFailure(array $response): bool
+    {
+        $text = strtolower(implode(' ', array_filter([
+            $response['name'] ?? null,
+            $response['address'] ?? null,
+            $response['message'] ?? null,
+        ], 'is_string')));
+
+        return collect(['unable to verify', 'could not verify', 'cannot verify'])
+            ->contains(fn (string $phrase) => str_contains($text, $phrase));
     }
 
     /** @return array<int, array{id: int, name: string, code: string}> */

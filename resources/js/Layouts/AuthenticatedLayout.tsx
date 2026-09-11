@@ -11,6 +11,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Analytics', route: 'admin.analytics.index', icon: 'chart' },
     { label: 'Transactions', route: 'admin.transactions.index', icon: 'swap' },
     { label: 'Providers', route: 'admin.providers.index', icon: 'pulse', permission: 'manage-providers' },
+    { label: 'Payment routing', route: 'admin.payment-provider.edit', icon: 'wallet', permission: 'manage-providers' },
     { label: 'Support', route: 'admin.support.index', icon: 'chat', permission: 'manage-support' },
     { label: 'Knowledge base', route: 'admin.faq.index', icon: 'book', permission: 'manage-support' },
     { label: 'Announcements', route: 'admin.announcements.index', icon: 'chat', permission: 'manage-support' },

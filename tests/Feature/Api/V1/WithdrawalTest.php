@@ -9,6 +9,7 @@ use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
     config([
+        'payments.domestic.driver' => 'paystack',
         'payments.paystack.secret_key' => 'sk_test_secret',
         'payments.paystack.public_key' => 'pk_test_public',
     ]);

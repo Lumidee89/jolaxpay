@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AnnouncementController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FaqArticleController;
 use App\Http\Controllers\Admin\FraudFlagController;
+use App\Http\Controllers\Admin\PaymentProviderSettingController;
 use App\Http\Controllers\Admin\ProviderController;
 use App\Http\Controllers\Admin\ReconciliationController;
 use App\Http\Controllers\Admin\ReferralController;
@@ -46,6 +47,8 @@ Route::prefix('admin')->group(function () {
             ->middleware('permission:manage-transactions')->name('admin.transactions.refund');
 
         Route::middleware('permission:manage-providers')->group(function () {
+            Route::get('payment-provider', [PaymentProviderSettingController::class, 'edit'])->name('admin.payment-provider.edit');
+            Route::patch('payment-provider', [PaymentProviderSettingController::class, 'update'])->name('admin.payment-provider.update');
             Route::get('providers', [ProviderController::class, 'index'])->name('admin.providers.index');
             Route::patch('providers/{disco}/health', [ProviderController::class, 'updateHealth'])->name('admin.providers.update-health');
             Route::patch('billers/{biller}/health', [ProviderController::class, 'updateBillerHealth'])->name('admin.billers.update-health');

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -10,7 +11,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * transaction-status broadcast payload's shape mirror this subset
  * (TRD §3, §8).
  *
- * @mixin \App\Models\Transaction
+ * @mixin Transaction
  */
 class TransactionDetailResource extends JsonResource
 {
@@ -47,6 +48,8 @@ class TransactionDetailResource extends JsonResource
             'safehaven_checkout' => $this->status->value === 'payment_initiated'
                 ? (isset($this->meta['safehaven_checkout']) ? [...$this->meta['safehaven_checkout'], 'reference' => $this->meta['safehaven_reference']] : null)
                 : null,
+            'paystack_authorization_url' => $this->status->value === 'payment_initiated'
+                ? ($this->meta['paystack_authorization_url'] ?? null) : null,
             'status_history' => $this->whenLoaded('statusHistory', fn () => $this->statusHistory->map(fn ($h) => [
                 'from' => $h->from_status?->value,
                 'to' => $h->to_status->value,

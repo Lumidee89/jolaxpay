@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Identity\OtpService;
 use App\Domain\Insights\TransactionSearchParser;
+use App\Domain\Payments\PaystackChargeReconciler;
 use App\Domain\Payments\SafeHavenGateway;
 use App\Domain\Transactions\TransactionService;
 use App\Enums\DeliveryChannel;
 use App\Enums\OtpPurpose;
+use App\Enums\OutcomeReason;
 use App\Enums\TransactionStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\ConfirmOutcomeRequest;
@@ -30,6 +32,7 @@ class TransactionController extends Controller
     public function __construct(
         private readonly TransactionService $transactions,
         private readonly SafeHavenGateway $safeHaven,
+        private readonly PaystackChargeReconciler $paystackReconciler,
         private readonly OtpService $otp,
         private readonly TransactionSearchParser $searchParser,
     ) {}
@@ -175,6 +178,9 @@ class TransactionController extends Controller
                 $this->transactions->processPayment($transaction);
                 $transaction->refresh();
             }
+        } elseif ($transaction->status === TransactionStatus::PaymentInitiated && ($transaction->meta['paystack_reference'] ?? null)) {
+            $this->paystackReconciler->reconcile($transaction->meta['paystack_reference']);
+            $transaction->refresh();
         }
 
         return response()->json(['data' => TransactionDetailResource::make($transaction)]);
@@ -186,7 +192,7 @@ class TransactionController extends Controller
         $this->authorizeAccess($request, $transaction);
 
         $data = $request->validated();
-        $reason = isset($data['reason']) ? \App\Enums\OutcomeReason::from($data['reason']) : null;
+        $reason = isset($data['reason']) ? OutcomeReason::from($data['reason']) : null;
 
         $transaction = $this->transactions->confirmOutcome($transaction, $data['confirmed'], $reason);
 
@@ -199,7 +205,7 @@ class TransactionController extends Controller
         $this->authorizeAccess($request, $transaction);
 
         $purchaseCount = $request->user()->transactions()
-            ->where('status', '!=', \App\Enums\TransactionStatus::Failed->value)
+            ->where('status', '!=', TransactionStatus::Failed->value)
             ->where('created_at', '<=', $transaction->created_at)
             ->count();
 

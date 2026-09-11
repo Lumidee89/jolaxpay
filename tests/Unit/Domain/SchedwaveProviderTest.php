@@ -110,3 +110,58 @@ it('verifies and vends electricity using the live Schedwave provider catalog', f
         ->and($provider->vend($transaction)->token)->toBe('1234-5678');
     Http::assertSent(fn ($request) => str_ends_with($request->url(), '/vtu/electricity') && $request['disco'] === 1 && $request['meter_number'] === '56789076064');
 });
+
+it('treats Schedwave unable-to-verify placeholders as indeterminate rather than blaming the meter', function () {
+    Http::fake([
+        '*/vtu/electricity-providers' => Http::response(['error' => false, 'providers' => [['id' => 1, 'name' => 'Ikeja Electric', 'code' => 'IE']]]),
+        '*/vtu/electricity-validate*' => Http::response([
+            'error' => false,
+            'name' => 'Unable to verify',
+            'address' => 'Unable to verify',
+            'message' => 'Unable to verify',
+        ]),
+    ]);
+    $disco = Disco::factory()->create(['code' => 'IKEDC']);
+    $meter = Meter::factory()->for(User::factory())->for($disco)->create();
+
+    $result = app(SchedwaveElectricityProvider::class)->verifyMeter($meter);
+
+    expect($result->valid)->toBeFalse()
+        ->and($result->message)->toContain('meter may still be valid');
+});
+
+it('identifies an explicitly invalid Schedwave meter response', function () {
+    Http::fake([
+        '*/vtu/electricity-providers' => Http::response(['error' => false, 'providers' => [['id' => 1, 'name' => 'Ikeja Electric', 'code' => 'IE']]]),
+        '*/vtu/electricity-validate*' => Http::response([
+            'error' => true,
+            'error_code' => 'INVALID_METER',
+            'message' => 'Invalid meter number',
+        ], 422),
+    ]);
+    $disco = Disco::factory()->create(['code' => 'IKEDC']);
+    $meter = Meter::factory()->for(User::factory())->for($disco)->create();
+
+    $result = app(SchedwaveElectricityProvider::class)->verifyMeter($meter);
+
+    expect($result->valid)->toBeFalse()
+        ->and($result->message)->toContain('meter number is incorrect');
+});
+
+it('keeps Schedwave service failures distinct from an incorrect meter', function () {
+    Http::fake([
+        '*/vtu/electricity-providers' => Http::response(['error' => false, 'providers' => [['id' => 1, 'name' => 'Ikeja Electric', 'code' => 'IE']]]),
+        '*/vtu/electricity-validate*' => Http::response([
+            'error' => true,
+            'error_code' => 'PROVIDER_ERROR',
+            'message' => 'Could not reach upstream provider',
+        ], 502),
+    ]);
+    $disco = Disco::factory()->create(['code' => 'IKEDC']);
+    $meter = Meter::factory()->for(User::factory())->for($disco)->create();
+
+    $result = app(SchedwaveElectricityProvider::class)->verifyMeter($meter);
+
+    expect($result->valid)->toBeFalse()
+        ->and($result->message)->toContain('could not verify this meter right now');
+});

@@ -5,6 +5,8 @@ namespace App\Domain\Transactions;
 use App\Domain\Fraud\FraudCheckService;
 use App\Domain\Notifications\NotificationDispatcher;
 use App\Domain\Payments\PaymentManager;
+use App\Domain\Payments\PaymentProviderSelector;
+use App\Domain\Payments\PaystackGateway;
 use App\Domain\Payments\SafeHavenGateway;
 use App\Domain\Referrals\CommissionService;
 use App\Domain\Vending\VendingManager;
@@ -42,6 +44,8 @@ class TransactionService
         private readonly LedgerService $ledger,
         private readonly NotificationDispatcher $notifier,
         private readonly SafeHavenGateway $safeHaven,
+        private readonly PaystackGateway $paystack,
+        private readonly PaymentProviderSelector $paymentProvider,
         private readonly FraudCheckService $fraud,
         private readonly CommissionService $commissions,
     ) {}
@@ -131,8 +135,10 @@ class TransactionService
         // ProcessTransactionPayment. Everything else (wallet, or 'card'
         // while PAYMENTS_DOMESTIC_DRIVER is still 'mock') keeps working
         // exactly as before: dispatch immediately.
-        if ($this->requiresSafeHavenCheckout($transaction)) {
-            $this->initializeSafeHavenCheckout($transaction, $user);
+        if ($this->requiresHostedCheckout($transaction)) {
+            $this->paymentProvider->is('paystack')
+                ? $this->initializePaystackCheckout($transaction, $user)
+                : $this->initializeSafeHavenCheckout($transaction, $user);
         } else {
             ProcessTransactionPayment::dispatch($transaction);
         }
@@ -140,11 +146,28 @@ class TransactionService
         return $transaction->fresh();
     }
 
-    protected function requiresSafeHavenCheckout(Transaction $transaction): bool
+    protected function requiresHostedCheckout(Transaction $transaction): bool
     {
         return $transaction->payment_method !== 'wallet'
             && $transaction->currency === config('payments.domestic_currency', 'NGN')
-            && config('payments.domestic.driver') === 'safehaven';
+            && in_array($this->paymentProvider->active(), ['safehaven', 'paystack'], true);
+    }
+
+    protected function initializePaystackCheckout(Transaction $transaction, User $user): void
+    {
+        $reference = 'txn-'.$transaction->reference;
+        $checkout = $this->paystack->initializeTransaction($user->email, (int) round((float) $transaction->total() * 100), $reference, [
+            'purpose' => 'transaction', 'transaction_id' => $transaction->id,
+        ]);
+        if (! $checkout) {
+            $this->fail($transaction, 'Could not start Paystack checkout — please try again.');
+
+            return;
+        }
+        $transaction->update(['meta' => [...($transaction->meta ?? []),
+            'payment_provider' => 'paystack', 'paystack_reference' => $reference,
+            'paystack_authorization_url' => $checkout['authorization_url'],
+        ]]);
     }
 
     /**
@@ -160,6 +183,7 @@ class TransactionService
         $transaction->update(['meta' => [
             ...($transaction->meta ?? []),
             'safehaven_reference' => $reference,
+            'payment_provider' => 'safehaven',
             'safehaven_checkout' => [...$this->safeHaven->checkoutConfig(), 'amount' => (float) $transaction->total(),
                 'customer' => ['firstName' => str($user->full_name)->before(' ')->value(), 'lastName' => str($user->full_name)->after(' ')->value(), 'emailAddress' => $user->email, 'phoneNumber' => $user->phone_number]],
         ]]);
@@ -191,6 +215,8 @@ class TransactionService
             // Paystack already confirmed this via webhook before this job
             // ran — nothing left to charge, just record the reference.
             $transaction->update(['payment_reference' => $transaction->meta['safehaven_reference']]);
+        } elseif ($transaction->meta['paystack_reference'] ?? null) {
+            $transaction->update(['payment_reference' => $transaction->meta['paystack_reference']]);
         } else {
             $result = $this->paymentManager->driverFor($transaction)->charge($transaction);
 

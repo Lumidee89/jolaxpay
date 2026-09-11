@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AgentReferralController;
+use App\Http\Controllers\Api\V1\AnnouncementController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BeneficiaryController;
 use App\Http\Controllers\Api\V1\BillerController;
@@ -12,6 +13,8 @@ use App\Http\Controllers\Api\V1\MeterController;
 use App\Http\Controllers\Api\V1\MeterGroupController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\NotificationPreferenceController;
+use App\Http\Controllers\Api\V1\PaystackWebhookController;
+use App\Http\Controllers\Api\V1\PaymentProviderController;
 use App\Http\Controllers\Api\V1\PowerCircleController;
 use App\Http\Controllers\Api\V1\ProviderStatusController;
 use App\Http\Controllers\Api\V1\ReferralController;
@@ -50,10 +53,11 @@ Route::prefix('v1')->group(function () {
 
     // Safe Haven notifies this endpoint about virtual-account and checkout payments.
     Route::post('webhooks/safehaven', [SafeHavenWebhookController::class, 'handle']);
+    Route::post('webhooks/paystack', [PaystackWebhookController::class, 'handle']);
 
     // --- Authenticated (Sanctum) ---
     Route::middleware(['auth:sanctum', 'email.verified'])->group(function () {
-        Route::get('announcements', [\App\Http\Controllers\Api\V1\AnnouncementController::class, 'index']);
+        Route::get('announcements', [AnnouncementController::class, 'index']);
         Route::post('auth/logout', [AuthController::class, 'logout']);
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::patch('auth/profile', [AuthController::class, 'updateProfile']);
@@ -112,6 +116,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('scheduled-purchases', ScheduledPurchaseController::class)->only(['index', 'store', 'update', 'destroy']);
 
         Route::get('wallet', [WalletController::class, 'show']);
+        Route::get('payment-provider', [PaymentProviderController::class, 'show']);
         Route::post('wallet/fund', [WalletController::class, 'fund']);
         Route::get('wallet/fund/{reference}/status', [WalletController::class, 'fundingStatus']);
         Route::post('wallet/transfer', [WalletController::class, 'transfer']);
