@@ -33,10 +33,32 @@ it('allows reconciliation staff to recover a successful Paystack wallet funding'
 
     $this->actingAs($admin)->post('/admin/reconcile-paystack')
         ->assertRedirect()
-        ->assertSessionHas('success', 'Checked 1 pending Paystack payment(s); 1 wallet(s) credited.');
+        ->assertSessionHas('success', 'Checked 1 pending Paystack payment(s); 1 wallet(s) credited; 0 marked failed.');
 
     expect($intent->fresh()->status)->toBe('success')
         ->and($wallet->fresh()->balance)->toBe('2500.00');
+});
+
+it('explains when a confirmed Paystack amount does not match the pending funding', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('ops');
+    $intent = WalletFundingIntent::factory()->create([
+        'reference' => 'fund-amount-mismatch',
+        'amount' => '2500.00',
+        'meta' => ['provider' => 'paystack'],
+    ]);
+
+    Http::fake([
+        'https://api.paystack.co/transaction/verify/fund-amount-mismatch' => Http::response([
+            'status' => true,
+            'data' => ['status' => 'success', 'amount' => 200000, 'reference' => 'fund-amount-mismatch'],
+        ]),
+    ]);
+
+    $this->actingAs($admin)->post('/admin/reconcile-paystack')
+        ->assertSessionHas('error', fn (string $message) => str_contains($message, 'does not match'));
+
+    expect($intent->fresh()->status)->toBe('pending');
 });
 
 it('blocks support staff from running Paystack reconciliation', function () {
