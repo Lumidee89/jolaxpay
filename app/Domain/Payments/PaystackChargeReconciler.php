@@ -65,14 +65,30 @@ class PaystackChargeReconciler
                 return null;
             }
 
-            if (isset($providerData['amount']) && (int) $providerData['amount'] !== (int) round((float) $intent->amount * 100)) {
-                Log::critical('Paystack funding amount mismatch — credit blocked', [
+            $expectedKobo = (int) round((float) $intent->amount * 100);
+            $receivedKobo = isset($providerData['amount']) ? (int) $providerData['amount'] : null;
+
+            // Paystack may charge more than the requested wallet top-up when
+            // transaction fees are passed to the customer. Credit only the
+            // original intent amount in that case. A lower provider amount
+            // remains an underpayment and must never be credited.
+            if ($receivedKobo !== null && $receivedKobo < $expectedKobo) {
+                Log::critical('Paystack wallet funding underpayment — credit blocked', [
                     'intent_id' => $intent->id,
-                    'expected_kobo' => (int) round((float) $intent->amount * 100),
-                    'received_kobo' => (int) $providerData['amount'],
+                    'expected_kobo' => $expectedKobo,
+                    'received_kobo' => $receivedKobo,
                 ]);
 
                 return null;
+            }
+
+            if ($receivedKobo !== null && $receivedKobo > $expectedKobo) {
+                Log::info('Paystack customer-borne fee detected; crediting requested wallet amount only', [
+                    'intent_id' => $intent->id,
+                    'requested_kobo' => $expectedKobo,
+                    'charged_kobo' => $receivedKobo,
+                    'fee_difference_kobo' => $receivedKobo - $expectedKobo,
+                ]);
             }
 
             $wallet = $intent->wallet;

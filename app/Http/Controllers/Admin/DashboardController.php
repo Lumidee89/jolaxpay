@@ -97,7 +97,7 @@ class DashboardController extends Controller
                 $expected = (int) round((float) $intent->amount * 100);
                 $received = isset($providerData['amount']) ? (int) $providerData['amount'] : null;
                 $issue ??= $received !== null && $received !== $expected
-                    ? "Paystack confirms {$intent->reference}, but its amount (₦".number_format($received / 100, 2).") does not match JolaxPay's pending amount (₦".number_format($expected / 100, 2).'). Credit was safely blocked.'
+                    ? "Paystack confirms {$intent->reference}, but the amount received (₦".number_format($received / 100, 2).") is below JolaxPay's pending amount (₦".number_format($expected / 100, 2).'). Credit was safely blocked.'
                     : "Paystack confirms {$intent->reference}, but the credit was blocked. Check the server log for the safety-check reason.";
             } elseif ($providerStatus === 'unknown') {
                 $issue ??= "Paystack could not verify {$intent->reference}. The production server may have an old/invalid live secret key cached.";
