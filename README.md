@@ -65,10 +65,13 @@ php artisan reverb:start       # realtime broadcasting (private-transaction.{id}
 npm run dev                    # Vite dev server for the admin UI (skip if you ran `npm run build`)
 ```
 
-Without a queue worker running, `POST /v1/transactions` still returns `202`
-immediately (Payment Initiated) but never progresses further — this is by
-design (TRD §5: vending/payment calls are never inline in the request
-cycle), not a bug.
+Production should run a persistent queue worker. On shared hosting where a
+process supervisor is unavailable, configure the control-panel cron to call
+`php artisan schedule:run` every minute; the scheduler includes a bounded
+`queue:work --stop-when-empty` fallback that drains payment, vending and
+delivery jobs. Without either mechanism, purchases stop after payment is
+confirmed. An operator can recover one such transaction from its admin detail
+page with **Manual retry**, which runs post-payment vending immediately.
 
 ## Mobile API (`/api/v1`)
 

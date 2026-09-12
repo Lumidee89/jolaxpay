@@ -2,7 +2,12 @@
 
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\Biller;
+use App\Enums\TransactionStatus;
+use App\Jobs\DeliverToken;
+use App\Jobs\ProcessVending;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\Queue;
 
 /**
  * The admin panel has no self-serve registration and no public surface —
@@ -46,4 +51,23 @@ it('keeps support staff off transaction retry/refund actions', function () {
     $this->actingAs($support)
         ->post("/admin/transactions/{$transaction->id}/retry")
         ->assertForbidden();
+});
+
+it('lets ops process a payment-confirmed vend immediately from the browser', function () {
+    Queue::fake();
+    $ops = User::factory()->create();
+    $ops->assignRole('ops');
+    $biller = Biller::factory()->create(['service_type' => 'airtime']);
+    $transaction = Transaction::factory()->forBiller()->for($biller)->create();
+    $transaction->forceFill(['status' => TransactionStatus::PaymentConfirmed])->save();
+
+    $this->actingAs($ops)
+        ->post("/admin/transactions/{$transaction->id}/retry")
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Retry triggered.');
+
+    expect($transaction->fresh()->status)->toBe(TransactionStatus::Delivered)
+        ->and($transaction->fresh()->vend_attempts)->toBe(1);
+    Queue::assertNotPushed(ProcessVending::class);
+    Queue::assertPushed(DeliverToken::class);
 });

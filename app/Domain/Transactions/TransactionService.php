@@ -392,20 +392,33 @@ class TransactionService
             throw new \RuntimeException('Cannot retry a terminal transaction.');
         }
 
-        match ($transaction->status) {
-            TransactionStatus::PaymentInitiated => ProcessTransactionPayment::dispatch($transaction),
-            TransactionStatus::PaymentConfirmed, TransactionStatus::GeneratingToken => ProcessVending::dispatch($transaction),
-            TransactionStatus::TokenGenerated => DeliverToken::dispatch($transaction),
-            default => throw new \RuntimeException("Nothing to retry from status [{$transaction->status->value}]."),
-        };
+        $retryFrom = $transaction->status;
 
         TransactionStatusHistory::create([
             'transaction_id' => $transaction->id,
-            'from_status' => $transaction->status,
-            'to_status' => $transaction->status,
+            'from_status' => $retryFrom,
+            'to_status' => $retryFrom,
             'note' => 'Manual retry triggered by admin.',
             'caused_by_user_id' => $admin->id,
         ]);
+
+        // Run post-payment recovery inline so an operator can restore a
+        // customer purchase from the browser even when a shared host's
+        // queue worker is down. Provider request IDs make retries safe, and
+        // stale queued jobs cannot vend again after the state is terminal.
+        if ($retryFrom === TransactionStatus::PaymentInitiated) {
+            ProcessTransactionPayment::dispatch($transaction);
+        } elseif (in_array($retryFrom, [TransactionStatus::PaymentConfirmed, TransactionStatus::GeneratingToken], true)) {
+            $this->processVending($transaction);
+            $transaction->refresh();
+            if ($transaction->status === TransactionStatus::TokenGenerated) {
+                $this->deliverToken($transaction);
+            }
+        } elseif ($retryFrom === TransactionStatus::TokenGenerated) {
+            $this->deliverToken($transaction);
+        } else {
+            throw new \RuntimeException("Nothing to retry from status [{$retryFrom->value}].");
+        }
     }
 
     /** Admin manual refund (User Journey §7). */

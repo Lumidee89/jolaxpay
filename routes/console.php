@@ -18,6 +18,15 @@ Schedule::command('purchases:evaluate-scheduled')->everyFiveMinutes()->withoutOv
 // status poll, and is idempotent once an intent has been credited.
 Schedule::command('payments:reconcile-paystack')->everyMinute()->withoutOverlapping();
 
+// Shared-hosting fallback: Horizon/queue:work is normally a persistent
+// process, but many control panels do not provide a process supervisor.
+// The ordinary once-per-minute Laravel scheduler cron can safely drain all
+// queued payment/vending/delivery work and then exit. `withoutOverlapping`
+// prevents two drains from processing the same backlog concurrently.
+Schedule::command('queue:work --stop-when-empty --tries=3 --max-time=50')
+    ->everyMinute()
+    ->withoutOverlapping();
+
 // MoreValue keeps its live plan/provider IDs behind the vendor dashboard,
 // so no public catalog can be safely synchronized. Operations maintains
 // those IDs in biller_variations and the MOREVALUE_*_PROVIDER_ID settings.
