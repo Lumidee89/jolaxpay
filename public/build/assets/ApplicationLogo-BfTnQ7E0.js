@@ -1,0 +1,1 @@
+import{t as e}from"./app-Al0PNi_P.js";var t=e();function n(e){return(0,t.jsx)(`img`,{src:`/images/logo.png`,alt:`JolaxPay`,...e})}export{n as t};
