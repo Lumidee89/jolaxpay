@@ -86,7 +86,7 @@ it('rejects registration with a duplicate phone number', function () {
     ])->assertUnprocessable()->assertJsonValidationErrors('phone_number');
 });
 
-it('logs a known device straight in with a token', function () {
+it('requires the daily OTP even when an old token exists but no login OTP was verified recently', function () {
     $user = User::factory()->create(['password' => 'Password123']);
     $user->createToken('iPhone-15'); // pre-existing token for this device name
 
@@ -96,7 +96,51 @@ it('logs a known device straight in with a token', function () {
         'device_name' => 'iPhone-15',
     ]);
 
-    $response->assertOk()->assertJsonStructure(['user', 'token']);
+    $response->assertOk()
+        ->assertJsonPath('requires_otp', true)
+        ->assertJsonMissing(['token']);
+});
+
+it('does not send another login OTP within 24 hours of successful verification', function () {
+    $user = User::factory()->create(['password' => 'Password123']);
+    Otp::create([
+        'user_id' => $user->id,
+        'identifier' => $user->phone_number,
+        'channel' => 'sms',
+        'purpose' => 'new_device_login',
+        'code_hash' => Hash::make('123456'),
+        'expires_at' => now()->subMinutes(5),
+        'consumed_at' => now()->subHours(23),
+    ]);
+
+    $this->postJson('/api/v1/auth/login', [
+        'email' => $user->email,
+        'password' => 'Password123',
+        'device_name' => 'another-device',
+    ])->assertOk()->assertJsonStructure(['user', 'token']);
+
+    expect(Otp::where('user_id', $user->id)->count())->toBe(1);
+});
+
+it('requires another login OTP after the 24-hour trust window expires', function () {
+    $user = User::factory()->create(['password' => 'Password123']);
+    Otp::create([
+        'user_id' => $user->id,
+        'identifier' => $user->phone_number,
+        'channel' => 'sms',
+        'purpose' => 'new_device_login',
+        'code_hash' => Hash::make('123456'),
+        'expires_at' => now()->subDay(),
+        'consumed_at' => now()->subHours(25),
+    ]);
+
+    $this->postJson('/api/v1/auth/login', [
+        'email' => $user->email,
+        'password' => 'Password123',
+        'device_name' => 'same-device-next-day',
+    ])->assertOk()->assertJsonPath('requires_otp', true)->assertJsonMissing(['token']);
+
+    expect(Otp::where('user_id', $user->id)->count())->toBe(2);
 });
 
 it('challenges a new device with an OTP instead of issuing a token', function () {

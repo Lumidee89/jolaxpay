@@ -45,6 +45,7 @@
         <env name="SMS_DRIVER" value="log"/>
         <env name="WHATSAPP_DRIVER" value="log"/>
         <env name="AUTH_BYPASS_LOGIN_OTP" value="false"/>
+        <env name="LOGIN_OTP_TRUST_HOURS" value="24"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

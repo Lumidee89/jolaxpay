@@ -13,6 +13,11 @@ return [
     // is meant to be temporary, not a permanent way to run without 2FA.
     'bypass_login_otp' => env('AUTH_BYPASS_LOGIN_OTP', false),
 
+    // A successful login OTP is trusted for this rolling window. Logging
+    // out (including the mobile inactivity timeout) does not trigger more
+    // SMS challenges until the 24-hour window expires.
+    'login_otp_trust_hours' => (int) env('LOGIN_OTP_TRUST_HOURS', 24),
+
     // PRD §15: purchases at or above this amount (NGN) require an OTP
     // step-up before TransactionService::initiate() runs — see
     // TransactionController::store()'s use of OtpPurpose::HighValueTransaction.

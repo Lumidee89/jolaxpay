@@ -16,6 +16,7 @@ use App\Http\Requests\Api\V1\UpdateProfileRequest;
 use App\Http\Requests\Api\V1\VerifyOtpRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Models\Otp;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -69,9 +70,10 @@ class AuthController extends Controller
     }
 
     /**
-     * Two-step for a new device (TRD §7): a recognised device (a token
-     * already exists with this exact device_name) logs straight in; an
-     * unrecognised one gets an OTP challenge instead of a token.
+     * Login SMS verification is required once per rolling 24-hour window.
+     * After a successful OTP, subsequent logins during that window issue a
+     * token without sending another SMS, even when inactivity logged the
+     * previous app session out.
      */
     public function login(LoginRequest $request): JsonResponse
     {
@@ -97,31 +99,37 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $isKnownDevice = $user->tokens()->where('name', $data['device_name'])->exists();
+        $recentlyVerifiedLogin = Otp::query()
+            ->where('user_id', $user->id)
+            ->where('purpose', OtpPurpose::NewDeviceLogin->value)
+            ->whereNotNull('consumed_at')
+            ->where('consumed_at', '>=', now()->subHours(config('identity.login_otp_trust_hours', 24)))
+            ->exists();
 
         // config/identity.php: a temporary escape hatch for use before a
         // real SMS_DRIVER exists (until then, OTP codes only reach the log
         // file, blocking anyone without server access). Off by default —
         // see that config file's docblock before relying on this.
-        if (! $isKnownDevice && ! config('identity.bypass_login_otp')) {
+        if (! $recentlyVerifiedLogin && ! config('identity.bypass_login_otp')) {
             $this->otp->issue($user->phone_number, OtpPurpose::NewDeviceLogin, DeliveryChannel::Sms, $user);
 
             return response()->json([
                 'requires_otp' => true,
                 'purpose' => OtpPurpose::NewDeviceLogin->value,
                 'identifier' => $user->phone_number,
-                'message' => 'New device detected. Enter the verification code we sent you to finish signing in.',
+                'message' => 'Enter the daily verification code we sent to your phone to finish signing in.',
             ]);
         }
 
-        if (! $isKnownDevice) {
+        if (! $recentlyVerifiedLogin) {
             Log::warning('Login OTP bypassed via AUTH_BYPASS_LOGIN_OTP — new device logged straight in.', [
                 'user_id' => $user->id,
                 'device_name' => $data['device_name'],
             ]);
         }
 
-        // Recognised device (or the OTP challenge is bypassed): rotate its token so old sessions can't linger indefinitely.
+        // OTP trusted for 24 hours (or explicitly bypassed): rotate this
+        // device token so old sessions cannot linger indefinitely.
         $user->tokens()->where('name', $data['device_name'])->delete();
         $token = $user->createToken($data['device_name'])->plainTextToken;
 
