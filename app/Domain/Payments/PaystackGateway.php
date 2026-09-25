@@ -25,6 +25,13 @@ use Throwable;
  */
 class PaystackGateway
 {
+    private ?string $lastError = null;
+
+    public function lastError(): ?string
+    {
+        return $this->lastError;
+    }
+
     /** @return array{authorization_url: string, access_code: string, reference: string}|null */
     public function initializeTransaction(string $email, int $amountKobo, string $reference, array $metadata = []): ?array
     {
@@ -128,6 +135,7 @@ class PaystackGateway
 
     protected function post(string $path, array $body): ?array
     {
+        $this->lastError = null;
         try {
             $response = Http::baseUrl($this->baseUrl())
                 ->withToken($this->secretKey())
@@ -136,6 +144,7 @@ class PaystackGateway
 
             return $this->decode($path, $response);
         } catch (Throwable $e) {
+            $this->lastError = 'Paystack could not be reached or authenticated.';
             Log::error("Paystack {$path} request failed", ['error' => $e->getMessage()]);
 
             return null;
@@ -144,6 +153,7 @@ class PaystackGateway
 
     protected function get(string $path, array $query = []): ?array
     {
+        $this->lastError = null;
         try {
             $response = Http::baseUrl($this->baseUrl())
                 ->withToken($this->secretKey())
@@ -152,6 +162,7 @@ class PaystackGateway
 
             return $this->decode($path, $response);
         } catch (Throwable $e) {
+            $this->lastError = 'Paystack could not be reached or authenticated.';
             Log::error("Paystack {$path} request failed", ['error' => $e->getMessage()]);
 
             return null;
@@ -163,6 +174,7 @@ class PaystackGateway
         $decoded = $response->json();
 
         if (! is_array($decoded)) {
+            $this->lastError = "Paystack returned an invalid response (HTTP {$response->status()}).";
             Log::error("Paystack {$path} returned an unexpected (non-JSON-object) response", [
                 'status' => $response->status(),
                 'body' => $response->body(),
@@ -172,6 +184,8 @@ class PaystackGateway
         }
 
         if (($decoded['status'] ?? null) !== true) {
+            $message = $decoded['message'] ?? null;
+            $this->lastError = is_string($message) && $message !== '' ? "Paystack: {$message}" : "Paystack rejected the request (HTTP {$response->status()}).";
             // A well-formed-but-unsuccessful Paystack response (e.g.
             // "Invalid key", account not whitelisted for transfers, an
             // unresolvable account number) — not a comm failure, but

@@ -28,6 +28,7 @@ use Inertia\Inertia;
 | — see App\Console\Commands\CreateAdminUser.
 */
 Route::view('/', 'website.home')->name('home');
+Route::view('/privacy-policy', 'website.privacy-policy')->name('privacy-policy');
 
 Route::prefix('admin')->group(function () {
     require __DIR__.'/auth.php';

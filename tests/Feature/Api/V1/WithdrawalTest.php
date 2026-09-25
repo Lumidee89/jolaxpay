@@ -4,6 +4,9 @@ use App\Domain\Wallet\LedgerService;
 use App\Enums\LedgerReason;
 use App\Models\User;
 use App\Models\Withdrawal;
+use App\Models\PaymentProviderSetting;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 
@@ -92,6 +95,88 @@ it('refunds the wallet when the account number cannot be resolved', function () 
     ])->assertStatus(422);
 
     expect((float) $this->wallet->fresh()->balance)->toBe(10000.0);
+});
+
+it('returns the payout provider rejection reason and restores the wallet', function () {
+    Http::fake([
+        'api.paystack.co/bank/resolve*' => Http::response(['status' => true, 'data' => ['account_number' => '0022728151', 'account_name' => 'WES GIBBONS']], 200),
+        'api.paystack.co/bank*' => Http::response(['status' => true, 'data' => [['name' => 'GTBank', 'code' => '058']]], 200),
+        'api.paystack.co/transferrecipient' => Http::response([
+            'status' => false,
+            'message' => 'Transfers are not enabled for this business.',
+        ], 403),
+    ]);
+
+    $this->postJson('/api/v1/withdrawals', [
+        'amount' => '2000',
+        'bank_code' => '058',
+        'account_number' => '0022728151',
+    ])->assertStatus(422)
+        ->assertJsonPath('code', 'withdrawal_provider_rejected')
+        ->assertJsonPath('message', 'Withdrawal could not be started. Paystack: Transfers are not enabled for this business. The held amount has been returned to your wallet.');
+
+    $withdrawal = Withdrawal::latest()->firstOrFail();
+    expect((float) $this->wallet->fresh()->balance)->toBe(10000.0)
+        ->and($withdrawal->status)->toBe('failed')
+        ->and($withdrawal->failure_reason)->toContain('Transfers are not enabled');
+});
+
+it('gets a fresh Safe Haven name enquiry session immediately before transfer', function () {
+    PaymentProviderSetting::current()->update(['active_provider' => 'safehaven']);
+    Cache::flush();
+
+    $privateKey = openssl_pkey_new(['private_key_bits' => 1024]);
+    openssl_pkey_export($privateKey, $privateKeyPem);
+    config([
+        'payments.safehaven.base_url' => 'https://safehaven.test',
+        'payments.safehaven.oauth_client_id' => 'client-id',
+        'payments.safehaven.ibs_client_id' => 'ibs-id',
+        'payments.safehaven.company_url' => 'https://jolaxpay.test',
+        'payments.safehaven.private_key' => $privateKeyPem,
+        'payments.safehaven.debit_account_number' => '9999999999',
+    ]);
+
+    $nameEnquiries = 0;
+    Http::fake(function (Request $request) use (&$nameEnquiries) {
+        if (str_ends_with($request->url(), '/oauth2/token')) {
+            return Http::response(['access_token' => 'safe-token'], 200);
+        }
+
+        if (str_ends_with($request->url(), '/transfers/name-enquiry')) {
+            $nameEnquiries++;
+
+            return Http::response(['data' => [
+                'accountName' => 'SAFE HAVEN USER',
+                'sessionId' => "SESSION-{$nameEnquiries}",
+            ]], 200);
+        }
+
+        if (str_ends_with($request->url(), '/transfers/banks')) {
+            return Http::response(['data' => [['name' => 'GTBank', 'bankCode' => '058']]], 200);
+        }
+
+        if (str_ends_with($request->url(), '/transfers')) {
+            expect($request->data()['nameEnquiryReference'])->toBe('SESSION-2');
+
+            return Http::response(['data' => ['_id' => 'safe-transfer-id', 'status' => 'Created']], 200);
+        }
+
+        return Http::response([], 404);
+    });
+
+    $this->postJson('/api/v1/withdrawals/resolve-account', [
+        'bank_code' => '058',
+        'account_number' => '0022728151',
+    ])->assertOk()->assertJsonPath('data.account_name', 'SAFE HAVEN USER');
+
+    $this->postJson('/api/v1/withdrawals', [
+        'amount' => '2000',
+        'bank_code' => '058',
+        'account_number' => '0022728151',
+    ])->assertCreated()->assertJsonPath('data.status', 'pending');
+
+    expect($nameEnquiries)->toBe(2)
+        ->and((float) $this->wallet->fresh()->balance)->toBe(8000.0);
 });
 
 it('marks the withdrawal successful and does not double-refund on a transfer.success webhook', function () {

@@ -11,6 +11,13 @@ use Throwable;
 /** Safe Haven MFB OAuth2, transfers, and VAS client. */
 class SafeHavenGateway
 {
+    private ?string $lastError = null;
+
+    public function lastError(): ?string
+    {
+        return $this->lastError;
+    }
+
     public function createVirtualAccount(float $amount, string $reference): ?array
     {
         $response = $this->request('post', '/virtual-accounts', [
@@ -45,9 +52,14 @@ class SafeHavenGateway
         ])->filter(fn ($bank) => $bank['name'] && $bank['code'])->values()->all();
     }
 
-    public function resolveAccount(string $accountNumber, string $bankCode): ?array
+    public function resolveAccount(string $accountNumber, string $bankCode, bool $fresh = false): ?array
     {
-        return Cache::remember("safehaven:account:{$bankCode}:{$accountNumber}", now()->addMinutes(20), function () use ($accountNumber, $bankCode) {
+        $cacheKey = "safehaven:account:{$bankCode}:{$accountNumber}";
+        if ($fresh) {
+            Cache::forget($cacheKey);
+        }
+
+        return Cache::remember($cacheKey, now()->addMinutes(20), function () use ($accountNumber, $bankCode) {
             $response = $this->request('post', '/transfers/name-enquiry', ['bankCode' => $bankCode, 'accountNumber' => $accountNumber]);
             $data = $response['data'] ?? $response;
             $name = $data['accountName'] ?? $data['name'] ?? null;
@@ -89,6 +101,7 @@ class SafeHavenGateway
 
     protected function request(string $method, string $path, array $data = []): ?array
     {
+        $this->lastError = null;
         try {
             $credentials = $this->credentials();
             $clientId = config('payments.safehaven.ibs_client_id') ?: ($credentials['ibs_client_id'] ?? null);
@@ -98,14 +111,28 @@ class SafeHavenGateway
                 ->timeout(config('payments.safehaven.timeout', 30))->{$method}($path, $data);
             $decoded = $response->json();
             if (! $response->successful() || ! is_array($decoded)) {
+                $this->lastError = $this->safeErrorMessage($decoded, $response->status());
                 Log::warning("Safe Haven {$path} rejected", ['status' => $response->status(), 'response' => $decoded ?? $response->body()]);
                 return null;
             }
             return $decoded;
         } catch (Throwable $e) {
+            $this->lastError = 'The payout provider could not be reached or authenticated.';
             Log::error("Safe Haven {$path} request failed", ['error' => $e->getMessage()]);
             return null;
         }
+    }
+
+    private function safeErrorMessage(mixed $response, int $status): string
+    {
+        if (is_array($response)) {
+            $message = $response['message'] ?? $response['responseMessage'] ?? $response['error'] ?? null;
+            if (is_string($message) && $message !== '') {
+                return "Safe Haven: {$message}";
+            }
+        }
+
+        return "Safe Haven rejected the transfer (HTTP {$status}).";
     }
 
     /** @return array{access_token: string, ibs_client_id?: string} */

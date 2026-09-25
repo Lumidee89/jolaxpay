@@ -70,7 +70,10 @@ class WithdrawalController extends Controller
         $wallet = $this->ledger->walletFor($request->user());
 
         $provider = $this->paymentProvider->active();
-        $account = $this->resolve($data['account_number'], $data['bank_code']);
+        // Safe Haven requires the sessionId from a name enquiry immediately
+        // before transfer. Do not reuse the cached reference generated when
+        // the mobile form first displayed the account holder's name.
+        $account = $this->resolve($data['account_number'], $data['bank_code'], fresh: $provider === 'safehaven');
 
         if (! $account) {
             return response()->json(['message' => 'Could not verify that account number. Double-check it and try again.'], 422);
@@ -112,9 +115,14 @@ class WithdrawalController extends Controller
         }
 
         if (! $transfer) {
-            $this->reverse($withdrawal, 'Could not initiate the transfer with our payout provider.');
+            $providerMessage = $provider === 'paystack' ? $this->paystack->lastError() : $this->safeHaven->lastError();
+            $reason = $providerMessage ?: 'Could not initiate the transfer with our payout provider.';
+            $this->reverse($withdrawal, $reason);
 
-            return response()->json(['message' => 'Withdrawal could not be started — please try again.'], 422);
+            return response()->json([
+                'message' => "Withdrawal could not be started. {$reason} The held amount has been returned to your wallet.",
+                'code' => 'withdrawal_provider_rejected',
+            ], 422);
         }
 
         $withdrawal->update(['provider_transfer_id' => $transfer['_id'] ?? $transfer['paymentReference'] ?? $transfer['transfer_code'] ?? null]);
@@ -131,11 +139,11 @@ class WithdrawalController extends Controller
         return response()->json(['data' => WithdrawalResource::make($withdrawal->fresh())], 201);
     }
 
-    private function resolve(string $accountNumber, string $bankCode): ?array
+    private function resolve(string $accountNumber, string $bankCode, bool $fresh = false): ?array
     {
         $account = $this->paymentProvider->is('paystack')
             ? $this->paystack->resolveAccount($accountNumber, $bankCode)
-            : $this->safeHaven->resolveAccount($accountNumber, $bankCode);
+            : $this->safeHaven->resolveAccount($accountNumber, $bankCode, $fresh);
         if (! $account) {
             return null;
         }
